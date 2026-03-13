@@ -9,6 +9,10 @@ plugins {
     kotlin("plugin.serialization") version "2.0.0"  // ← add this
 }
 val ktorVersion = "2.3.12"
+    kotlin("plugin.serialization") version "2.1.0"
+}
+
+val ktorVersion = "3.0.3"
 val secrets = Properties().apply {
     val secretsFile = rootProject.file("secrets.properties")
     if (secretsFile.exists()) {
@@ -55,7 +59,6 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
-            implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
 
@@ -65,10 +68,15 @@ kotlin {
             implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
             implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
 
+            // Supabase
+            implementation(libs.supabase.auth)
+            implementation(libs.supabase.postgrest)
+            implementation(libs.supabase.realtime)
+
             // Kotlin serialization
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             // Coroutines
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
         }
 
         // Define iosMain intermediate source set
@@ -91,7 +99,8 @@ kotlin {
     }
 
     val generateSecrets = tasks.register("generateSecrets") {
-        val supabaseUrl = secrets["SUPABASE_URL"]?.toString() ?: "YOUR_SUPABASE_URL"
+        val projectID = "goyvtbimpgvyzydxkdlh"
+        val supabaseUrl = "https://$projectID.supabase.co"
         val supabaseAnonKey = secrets["SUPABASE_ANON_KEY"]?.toString() ?: "YOUR_SUPABASE_ANON_KEY"
 
         inputs.property("supabaseUrl", supabaseUrl)

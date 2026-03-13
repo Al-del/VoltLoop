@@ -85,6 +85,7 @@ fun GreenNavBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NavButton(
     item: NavItem,
