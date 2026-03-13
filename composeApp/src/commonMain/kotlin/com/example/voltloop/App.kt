@@ -1,26 +1,21 @@
 package com.example.voltloop
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.safeContentPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import org.jetbrains.compose.resources.painterResource
-
-import voltloop.composeapp.generated.resources.Res
-import voltloop.composeapp.generated.resources.compose_multiplatform
+import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.auth.auth
 
 @Composable
-@Preview
 fun App() {
-    Nav_Bar_ussage()
+    val sessionStatus by supabase.auth.sessionStatus.collectAsState()
+
+    when (sessionStatus) {
+        is SessionStatus.Authenticated -> {
+            Nav_Bar_ussage()
+        }
+        else -> {
+            LoginScreen(onLoginSuccess = {
+                // Supabase automatically updates sessionStatus
+            })
+        }
+    }
 }
