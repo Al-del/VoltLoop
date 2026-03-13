@@ -1,13 +1,19 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.composeHotReload)
+
+}
+val ktorVersion = "2.3.7"
+val secrets = Properties().apply {
+    val secretsFile = rootProject.file("secrets.properties")
+    if (secretsFile.exists()) {
+        load(secretsFile.inputStream())
+    }
 }
 
 kotlin {
@@ -16,34 +22,32 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
+
+    // Define all iOS targets
+    iosX64()
+    iosArm64()
+    iosSimulatorArm64()
+
+    // Configure the framework for Xcode
+    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
+        binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
         }
     }
-    
-    jvm()
-    
-    js {
-        browser()
-        binaries.executable()
-    }
-    
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        browser()
-        binaries.executable()
-    }
-    
+
     sourceSets {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
+            implementation("androidx.camera:camera-camera2:1.3.4")
+            implementation("androidx.camera:camera-lifecycle:1.3.4")
+            implementation("androidx.camera:camera-view:1.3.4")
+
+            implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+            implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
+            implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -54,14 +58,64 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+
+            implementation(compose.materialIconsExtended)
+            implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
+            implementation("io.ktor:ktor-client-core:$ktorVersion")
+            implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+            implementation("io.ktor:ktor-client-logging:$ktorVersion")
+
+            // Kotlin serialization
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+            // Coroutines
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
         }
+
+        // Define iosMain intermediate source set
+        val iosMain by creating {
+            dependsOn(commonMain.get())
+            dependencies {
+                implementation("io.ktor:ktor-client-darwin:${ktorVersion}")
+            }
+        }
+
+        // Link platform-specific source sets to iosMain
+        val iosX64Main by getting { dependsOn(iosMain) }
+        val iosArm64Main by getting { dependsOn(iosMain) }
+        val iosSimulatorArm64Main by getting { dependsOn(iosMain) }
+
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
-        jvmMain.dependencies {
-            implementation(compose.desktop.currentOs)
-            implementation(libs.kotlinx.coroutinesSwing)
+    }
+
+    val generateSecrets = tasks.register("generateSecrets") {
+        val supabaseUrl = secrets["SUPABASE_URL"]?.toString() ?: "YOUR_SUPABASE_URL"
+        val supabaseAnonKey = secrets["SUPABASE_ANON_KEY"]?.toString() ?: "YOUR_SUPABASE_ANON_KEY"
+
+        inputs.property("supabaseUrl", supabaseUrl)
+        inputs.property("supabaseAnonKey", supabaseAnonKey)
+
+        val outputDir = layout.buildDirectory.dir("generated/secrets/commonMain/kotlin")
+        outputs.dir(outputDir)
+
+        doLast {
+            val outputFile = outputDir.get().file("com/example/voltloop/Secrets.kt").asFile
+            outputFile.parentFile.mkdirs()
+            outputFile.writeText("""
+                package com.example.voltloop
+
+                object Secrets {
+                    const val SUPABASE_URL = "$supabaseUrl"
+                    const val SUPABASE_ANON_KEY = "$supabaseAnonKey"
+                }
+            """.trimIndent())
         }
+    }
+
+    sourceSets.commonMain.configure {
+        kotlin.srcDir(generateSecrets)
     }
 }
 
@@ -94,16 +148,4 @@ android {
 
 dependencies {
     debugImplementation(libs.compose.uiTooling)
-}
-
-compose.desktop {
-    application {
-        mainClass = "com.example.voltloop.MainKt"
-
-        nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.example.voltloop"
-            packageVersion = "1.0.0"
-        }
-    }
 }
