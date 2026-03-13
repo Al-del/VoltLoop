@@ -6,9 +6,9 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-
+    kotlin("plugin.serialization") version "2.0.0"  // ← add this
 }
-val ktorVersion = "2.3.7"
+val ktorVersion = "2.3.12"
 val secrets = Properties().apply {
     val secretsFile = rootProject.file("secrets.properties")
     if (secretsFile.exists()) {
@@ -47,7 +47,7 @@ kotlin {
             implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-            implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
+            implementation("io.ktor:ktor-client-okhttp:2.3.12")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -61,10 +61,9 @@ kotlin {
 
             implementation(compose.materialIconsExtended)
             implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
-            implementation("io.ktor:ktor-client-core:$ktorVersion")
-            implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
-            implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
-            implementation("io.ktor:ktor-client-logging:$ktorVersion")
+            implementation("io.ktor:ktor-client-core:2.3.12")
+            implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
 
             // Kotlin serialization
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
@@ -86,7 +85,8 @@ kotlin {
         val iosSimulatorArm64Main by getting { dependsOn(iosMain) }
 
         commonTest.dependencies {
-            implementation(libs.kotlin.test)
+         implementation(libs.kotlin.test)
+      //      implementation("io.ktor:ktor-client-darwin:2.3.12")
         }
     }
 

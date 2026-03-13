@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.voltloop.NetworkStuff.getUsers
 import kotlinx.coroutines.launch
 
 data class CameraPermissionState(
@@ -182,6 +183,22 @@ private fun ResultScreen(result: String, onScanAgain: () -> Unit) {
               TODO: Raspberry pi request
 
               */
+                scope.launch {
+                    /* DONE: GET REQUEST HOW TO DO
+                    try {
+                        val users = getUsers()
+                        users.forEach { user ->
+                            println("USERS_SUCCESS: Name: ${user.name} | Email: ${user.email}")
+                        }
+                    } catch (e: Exception) {
+                        println("USERS_ERROR: ${e.message}")  // 👈 this
+                    }
+                    */
+
+
+
+
+                }
             },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
             shape = RoundedCornerShape(14.dp),
