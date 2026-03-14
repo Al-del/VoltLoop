@@ -2,6 +2,9 @@ package com.example.voltloop
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -22,6 +25,8 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.MapsInitializer
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
@@ -53,11 +58,11 @@ actual fun MapView(
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-    
+
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -90,7 +95,7 @@ actual fun MapView(
         }
     }
 
-    // Marker icons state
+    // Marker icons state — explicit Bitmap? type avoids mutableStateOf(null) inference error
     var oneBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var moreBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
@@ -196,20 +201,20 @@ private fun createFriendIcon(username: String, context: Context): BitmapDescript
     val size = (48 * density).toInt()
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    
+
     val paint = Paint()
     paint.isAntiAlias = true
-    
+
     // Background Circle
     paint.color = 0xFF4ADE80.toInt() // GreenAccent
     canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
-    
+
     // Border
     paint.color = android.graphics.Color.WHITE
     paint.style = Paint.Style.STROKE
     paint.strokeWidth = 2 * density
     canvas.drawCircle(size / 2f, size / 2f, (size / 2f) - (1 * density), paint)
-    
+
     // Initial text
     paint.style = Paint.Style.FILL
     paint.textAlign = Paint.Align.CENTER
@@ -219,6 +224,6 @@ private fun createFriendIcon(username: String, context: Context): BitmapDescript
     val textHeight = paint.descent() - paint.ascent()
     val textOffset = textHeight / 2 - paint.descent()
     canvas.drawText(initial, size / 2f, size / 2f + textOffset, paint)
-    
+
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }

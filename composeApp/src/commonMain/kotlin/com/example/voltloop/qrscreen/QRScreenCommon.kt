@@ -198,10 +198,9 @@ private fun ResultScreen(result: String, onScanAgain: () -> Unit) {
                         users.forEach { user ->
                             println("USERS_SUCCESS: Name: ${user.name} | Email: ${user.email}")
                             }
+                        showTimer = true
                     } catch (e: Exception) {
                         println("USERS_ERROR: ${e.message}")  // 👈 this
-                        showTimer = true
-
                     }
 
 

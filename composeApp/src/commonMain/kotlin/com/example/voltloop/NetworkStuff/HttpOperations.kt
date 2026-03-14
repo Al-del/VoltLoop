@@ -14,6 +14,9 @@ data class ApiResponse(val message: String)
 @Serializable
 data class EventResponse(val event: String)
 
+@Serializable
+data class LockResponse(val success: Boolean, val status: Int? = null, val error: String? = null)
+
 const val BASE_URL = "https://api.instasight.click"
 
 // GET /users
@@ -30,6 +33,10 @@ suspend fun createUser(user: User): ApiResponse =
 suspend fun getEvent(): EventResponse =
     httpClient.get("$BASE_URL/get_event").body<EventResponse>()
 
+// GET /lock
+suspend fun lockLocker(): LockResponse =
+    httpClient.get("$BASE_URL/lock").body<LockResponse>()
+
 @Serializable
 data class ProofResponse(
     val status: String,
@@ -37,11 +44,12 @@ data class ProofResponse(
     val similarity: Float,
     val accepted: Boolean
 )
+
 suspend fun submitProof(base64Image: String, text: String): ProofResponse {
     val response = httpClient.post("$BASE_URL/submit_proof") {
         contentType(ContentType.Application.Json)
         setBody(mapOf("image" to base64Image, "text" to text))
     }
-    println("RAW_RESPONSE: ${response.body<String>()}")  // <-- add this
+    println("RAW_RESPONSE: ${response.body<String>()}")
     return response.body()
 }

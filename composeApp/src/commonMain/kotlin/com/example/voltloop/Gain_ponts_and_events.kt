@@ -23,7 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.voltloop.Camera.ProveItScreen
 import com.example.voltloop.NetworkStuff.getEvent
+import com.example.voltloop.NetworkStuff.lockLocker
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
 private val BgDark      = Color(0xFF0D0F14)
@@ -145,14 +147,12 @@ fun TimerScreen() {
                 provedCount = provedCount,
                 totalCount  = events.size,
                 onDismiss   = {
-                    // 10 pts per proved challenge + 5 pts base for completing
                     totalPoints   += (provedCount * 10) + 5
                     state          = TimerState.IDLE
                     secondsLeft    = totalSeconds
                     runningSeconds = 0
                     events.clear()
-                   //TODO : Add logic to push to the DB some point here!
-
+                    //TODO : Add logic to push to the DB some point here!
                 }
             )
         }
@@ -320,7 +320,6 @@ private fun HeaderSection(totalPoints: Int) {
             )
         }
 
-        // Points pill
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50.dp))
@@ -519,6 +518,9 @@ private fun ControlButtons(
 // ─── Done banner ──────────────────────────────────────────────────────────────
 @Composable
 private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var locking by remember { mutableStateOf(false) }
+
     val alpha by rememberInfiniteTransition(label = "blink").animateFloat(
         initialValue = 0.6f, targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
@@ -558,12 +560,10 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                 lineHeight = 20.sp
             )
 
-            // Stats row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Challenges box
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -583,7 +583,6 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                     }
                 }
 
-                // Points box
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -607,7 +606,20 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
             Spacer(Modifier.height(4.dp))
 
             Button(
-                onClick = onDismiss,
+                onClick = {
+                    scope.launch {
+                        locking = true
+                        try {
+                            lockLocker()
+                        } catch (e: Exception) {
+                            println("LOCK_ERROR: ${e.message}")
+                        } finally {
+                            locking = false
+                            onDismiss()
+                        }
+                    }
+                },
+                enabled = !locking,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -615,7 +627,15 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                     contentColor   = BgDark
                 )
             ) {
-                Text("✓  I placed it!", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (locking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = BgDark,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("✓  I placed it!", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
     }
