@@ -1,10 +1,12 @@
 package com.example.voltloop.NetworkStuff
-
+import com.example.voltloop.AppState
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.serialization.Serializable
-
+import kotlinx.serialization.json.jsonPrimitive
 @Serializable
 data class User(val name: String, val email: String)
 
@@ -33,10 +35,14 @@ suspend fun createUser(user: User): ApiResponse =
 suspend fun getEvent(): EventResponse =
     httpClient.get("$BASE_URL/get_event").body<EventResponse>()
 
-// GET /lock
-suspend fun lockLocker(): LockResponse =
-    httpClient.get("$BASE_URL/lock").body<LockResponse>()
-
+suspend fun lockLocker(): LockResponse {
+    val email = AppState.currentUser.value?.email ?: "unknown"
+    println("Locker user $email")
+    return httpClient.get("$BASE_URL/lock") {
+        parameter("email", email)
+    }.body<LockResponse>()
+        .also { println("🔒 Locker locked by: $email") }
+}
 @Serializable
 data class ProofResponse(
     val status: String,

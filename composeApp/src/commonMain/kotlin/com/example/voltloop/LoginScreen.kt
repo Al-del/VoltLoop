@@ -42,7 +42,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
         Text("VoltLoop", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Username Field (Only visible during Sign Up)
         AnimatedVisibility(visible = isSignUp) {
             Column {
                 TextField(
@@ -92,7 +91,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                             supabase.auth.signUpWith(Email) {
                                 this.email = email
                                 this.password = password
-                                // Pass username to user_metadata
                                 data = buildJsonObject {
                                     put("username", username)
                                     put("display_name", username)
@@ -109,6 +107,10 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                                 this.password = password
                             }
                         }
+
+                        AppState.currentUser.value = supabase.auth.currentSessionOrNull()?.user
+                        println("🔒 Locker locked by: $username")
+
                         onLoginSuccess()
                     } catch (e: Exception) {
                         errorMessage = e.message ?: if (isSignUp) "Sign up failed" else "Login failed"
@@ -121,14 +123,17 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             enabled = !isLoading
         ) {
             if (isLoading) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
             } else {
                 Text(if (isSignUp) "Create Account" else "Login")
             }
         }
 
         TextButton(
-            onClick = { 
+            onClick = {
                 isSignUp = !isSignUp
                 errorMessage = null
             },

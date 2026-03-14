@@ -47,12 +47,14 @@ private data class EcoEvent(
 
 @Composable
 fun TimerScreen() {
+
     var totalSeconds   by remember { mutableStateOf(60) }
     var secondsLeft    by remember { mutableStateOf(totalSeconds) }
     var state          by remember { mutableStateOf(TimerState.IDLE) }
     var provingEvent   by remember { mutableStateOf<EcoEvent?>(null) }
     var runningSeconds by remember { mutableStateOf(0) }
-    var totalPoints    by remember { mutableStateOf(0) }
+    var totalPoints    by AppState.totalPoints  // ← from AppState now
+
 
     val events = remember { mutableStateListOf<EcoEvent>() }
 
@@ -147,12 +149,11 @@ fun TimerScreen() {
                 provedCount = provedCount,
                 totalCount  = events.size,
                 onDismiss   = {
-                    totalPoints   += (provedCount * 10) + 5
+                    AppState.totalPoints.value += (provedCount * 10) + 5  // ← updates AppState
                     state          = TimerState.IDLE
                     secondsLeft    = totalSeconds
                     runningSeconds = 0
                     events.clear()
-                    //TODO : Add logic to push to the DB some point here!
                 }
             )
         }
