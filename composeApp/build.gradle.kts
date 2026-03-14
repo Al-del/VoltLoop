@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    kotlin("plugin.serialization") version "2.1.0"
+    kotlin("plugin.serialization")
 }
 
 val ktorVersion = "3.0.3"
@@ -42,22 +42,31 @@ kotlin {
             implementation("androidx.camera:camera-camera2:1.3.4")
             implementation("androidx.camera:camera-lifecycle:1.3.4")
             implementation("androidx.camera:camera-view:1.3.4")
-
             implementation("com.google.mlkit:barcode-scanning:17.3.0")
-
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-            implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
+androidMain.dependencies {
+    implementation(libs.compose.uiToolingPreview)
+    implementation(libs.androidx.activity.compose)
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
+    implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
 
-            // Google Maps
-            implementation("com.google.android.gms:play-services-maps:19.0.0")
-            implementation("com.google.android.gms:play-services-location:21.3.0")
-            implementation("com.google.maps.android:maps-compose:6.1.2")
-            implementation("com.google.maps.android:maps-compose-utils:6.1.2")
+    // Google Maps
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.maps.android:maps-compose:6.1.2")
+    implementation("com.google.maps.android:maps-compose-utils:6.1.2")
 
-            // Coil for SVG support
-            implementation(libs.coil.compose)
-            implementation(libs.coil.svg)
+    // Coil for SVG support
+    implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
+}
+
         }
+
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -66,29 +75,29 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-
             implementation(compose.materialIconsExtended)
             implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
             implementation("io.ktor:ktor-client-core:$ktorVersion")
             implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
             implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
             implementation("io.ktor:ktor-client-logging:$ktorVersion")
-
+         //   implementation(project.dependencies.platform(libs.supabase.bom))
             // Supabase
-            implementation(libs.supabase.auth)
-            implementation(libs.supabase.postgrest)
-            implementation(libs.supabase.realtime)
+            implementation("io.github.jan-tennert.supabase:auth-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:realtime-kt:3.0.3")
 
             // Kotlin serialization
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             // Coroutines
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
         }
 
         val iosMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:${ktorVersion}")
+                implementation("io.ktor:ktor-client-darwin:$ktorVersion")
             }
         }
 
