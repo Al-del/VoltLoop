@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.kotlinSerialization) // Fix: use version catalog alias instead of kotlin()
+    kotlin("plugin.serialization") // Fix: use version catalog alias instead of kotlin()
 }
 
 val ktorVersion = "3.0.3"

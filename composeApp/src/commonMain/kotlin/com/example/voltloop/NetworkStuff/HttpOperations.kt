@@ -33,14 +33,15 @@ suspend fun getEvent(): EventResponse =
 @Serializable
 data class ProofResponse(
     val status: String,
-    val shape: List<Int>,
-    val height: Int,
-    val width: Int,
-    val channels: Int
+    val text: String,
+    val similarity: Float,
+    val accepted: Boolean
 )
-
-suspend fun submitProof(base64Image: String): ProofResponse =
-    httpClient.post("$BASE_URL/submit_proof") {
+suspend fun submitProof(base64Image: String, text: String): ProofResponse {
+    val response = httpClient.post("$BASE_URL/submit_proof") {
         contentType(ContentType.Application.Json)
-        setBody(mapOf("image" to base64Image))
-    }.body()
+        setBody(mapOf("image" to base64Image, "text" to text))
+    }
+    println("RAW_RESPONSE: ${response.body<String>()}")  // <-- add this
+    return response.body()
+}
