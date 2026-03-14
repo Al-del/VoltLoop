@@ -123,17 +123,14 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             enabled = !isLoading
         ) {
             if (isLoading) {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
             } else {
                 Text(if (isSignUp) "Create Account" else "Login")
             }
         }
 
         TextButton(
-            onClick = {
+            onClick = { 
                 isSignUp = !isSignUp
                 errorMessage = null
             },

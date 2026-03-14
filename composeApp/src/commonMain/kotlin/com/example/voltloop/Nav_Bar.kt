@@ -216,6 +216,7 @@ private fun NavButton(
 fun Nav_Bar_ussage() {
     val navController = rememberNavController()
     var selected by remember { mutableStateOf(NavItem.StartTrip) }
+    var previousSelected by remember { mutableStateOf(NavItem.StartTrip) }
     val scope = rememberCoroutineScope()
 
     var isAdmin by remember { mutableStateOf(false) }
@@ -228,6 +229,21 @@ fun Nav_Bar_ussage() {
     val currentRoute = navBackStackEntry?.destination?.route
     val isChatScreen = currentRoute?.startsWith("chat/") == true
 
+    val selectedRef = remember { mutableStateOf(selected) }
+    LaunchedEffect(selected) { selectedRef.value = selected }
+
+    LaunchedEffect(currentRoute) {
+        when {
+            currentRoute == Screen.Settings.route -> { previousSelected = selected; selected = NavItem.Settings }
+            currentRoute == Screen.Friends.route -> { previousSelected = selected; selected = NavItem.Friends }
+            currentRoute == Screen.Map.route -> { previousSelected = selected; selected = NavItem.Map }
+            currentRoute == Screen.StartTrip.route -> { previousSelected = selected; selected = NavItem.StartTrip }
+            currentRoute == Screen.Store.route -> { previousSelected = selected; selected = NavItem.Store }
+            currentRoute?.startsWith("chat/") == true -> { previousSelected = selected }
+            currentRoute == null -> selected = previousSelected
+        }
+    }
+
     LaunchedEffect(Unit) {
         val user = supabase.auth.currentUserOrNull()
         isAdmin = user?.email == "admin@voltloop.com"
@@ -237,7 +253,6 @@ fun Nav_Bar_ussage() {
     LaunchedEffect(Unit) {
         val json = Json { ignoreUnknownKeys = true }
 
-        // Initial fetches
         try {
             batteries = supabase.postgrest["battery_locations"].select().decodeList<BatteryLocation>()
 
@@ -274,21 +289,16 @@ fun Nav_Bar_ussage() {
             println("Error fetching initial data: ${e.message}")
         }
 
-        // Real-time location subscription
         val locChannel = supabase.channel("locations_channel")
         val locFlow = locChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "user_locations"
         }
-
         locFlow.onEach { action: PostgresAction ->
             if (action is PostgresAction.Insert || action is PostgresAction.Update) {
                 val updatedLoc = json.decodeFromJsonElement<UserLocation>(action.record)
-
                 if (friendsLocations.none { it.id == updatedLoc.id }) return@onEach
-
                 val existingUsername = friendsLocations.find { it.id == updatedLoc.id }?.username
                 val locWithUsername = updatedLoc.copy(username = existingUsername ?: "Friend")
-
                 friendsLocations = if (friendsLocations.any { it.id == updatedLoc.id }) {
                     friendsLocations.map { if (it.id == updatedLoc.id) locWithUsername else it }
                 } else {
@@ -298,7 +308,6 @@ fun Nav_Bar_ussage() {
         }.launchIn(this)
         locChannel.subscribe()
 
-        // Battery updates subscription
         val batChannel = supabase.channel("batteries_channel")
         val batFlow = batChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "battery_locations"
@@ -352,7 +361,15 @@ fun Nav_Bar_ussage() {
                             println("Error adding battery: ${e.message}")
                         }
                     }
-                } else null
+                } else null,
+                onFriendChatClick = { friendId, friendName ->
+                    if (selectedRef.value == NavItem.Map) {
+                        navController.navigate(Screen.Map.route) {
+                            launchSingleTop = true
+                        }
+                    }
+                    navController.navigate(Screen.Chat.createRoute(friendId, friendName))
+                }
             )
         }
     }
@@ -485,12 +502,10 @@ fun FriendsScreen(navController: NavController) {
                     val profile = profiles.find { it.id == otherId }
                     if (profile != null) friendship to profile else null
                 }
-
                 friendRequests = allFriendships.filter { it.status == "pending" && it.friendId == currentUserId }.mapNotNull { friendship ->
                     val profile = profiles.find { it.id == friendship.userId }
                     if (profile != null) friendship to profile else null
                 }
-
                 sentRequests = allFriendships.filter { it.status == "pending" && it.userId == currentUserId }.mapNotNull { friendship ->
                     val profile = profiles.find { it.id == friendship.friendId }
                     if (profile != null) friendship to profile else null
@@ -718,6 +733,77 @@ fun UserRow(
                     }
                 }
             }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(profile.displayName ?: "User", fontWeight = FontWeight.SemiBold)
+                Text(profile.email ?: "", fontSize = 12.sp, color = Color.Gray)
+            }
+            if (actionLabel != null) {
+                Button(
+                    onClick = onAction,
+                    enabled = enabled,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GreenBright,
+                        disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(actionLabel, fontSize = 12.sp)
+                }
+            }
+            if (showOptions) {
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Remove", color = Color.Red) },
+                            onClick = {
+                                showMenu = false
+                                onRemove?.invoke()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen(friendId: String, friendName: String, navController: NavController) {
+    val scope = rememberCoroutineScope()
+    var messages by remember { mutableStateOf(listOf<Message>()) }
+    var newMessage by remember { mutableStateOf("") }
+    val currentUserId = remember { supabase.auth.currentUserOrNull()?.id ?: "" }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(friendId) {
+        try {
+            val fetchedMessages = supabase.postgrest["messages"]
+                .select {
+                    filter {
+                        or {
+                            and {
+                                eq("sender_id", currentUserId)
+                                eq("receiver_id", friendId)
+                            }
+                            and {
+                                eq("sender_id", friendId)
+                                eq("receiver_id", currentUserId)
+                            }
+                        }
+                    }
+                }.decodeList<Message>()
+            messages = fetchedMessages.sortedBy { it.createdAt }
+        } catch (e: Exception) {
+            println("Error fetching messages: ${e.message}")
         }
     }
 }

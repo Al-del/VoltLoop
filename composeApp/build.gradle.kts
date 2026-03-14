@@ -44,17 +44,27 @@ kotlin {
             implementation("androidx.camera:camera-view:1.3.4")
             implementation("com.google.mlkit:barcode-scanning:17.3.0")
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-            implementation("io.ktor:ktor-client-okhttp:${ktorVersion}") // Fix: removed duplicate
+androidMain.dependencies {
+    implementation(libs.compose.uiToolingPreview)
+    implementation(libs.androidx.activity.compose)
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
+    implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
 
-            // Google Maps
-            implementation("com.google.android.gms:play-services-maps:19.0.0")
-            implementation("com.google.android.gms:play-services-location:21.3.0")
-            implementation("com.google.maps.android:maps-compose:6.1.2")
-            implementation("com.google.maps.android:maps-compose-utils:6.1.2")
+    // Google Maps
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.maps.android:maps-compose:6.1.2")
+    implementation("com.google.maps.android:maps-compose-utils:6.1.2")
 
-            // Coil for SVG support
-            implementation(libs.coil.compose)
-            implementation(libs.coil.svg)
+    // Coil for SVG support
+    implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
+}
+
         }
 
         commonMain.dependencies {
@@ -142,7 +152,7 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
-    // Fix: removed unreliable SVG res filter — just don't place .svg files in res/
+    sourceSets["main"].res.filter.exclude("**/one_battery.svg")
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
