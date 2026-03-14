@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +29,7 @@ data class BoosterItem(
     val name: String,
     val description: String,
     val multiplier: Int,
-    val price: String,
+    val cost: Long,
     val icon: ImageVector
 )
 
@@ -40,8 +39,8 @@ fun StoreScreen() {
     var userProfile by remember { mutableStateOf<Profile?>(null) }
     
     val boosters = listOf(
-        BoosterItem("x2 Multiplier", "Double your points on every trip!", 2, "$0.99", Icons.Default.ElectricBolt),
-        BoosterItem("x3 Multiplier", "Triple your points on every trip!", 3, "$1.99", Icons.Default.Star)
+        BoosterItem("x2 Multiplier", "Double your points on every trip!", 2, 500, Icons.Default.ElectricBolt),
+        BoosterItem("x3 Multiplier", "Triple your points on every trip!", 3, 1200, Icons.Default.Star)
     )
 
     LaunchedEffect(Unit) {
@@ -116,17 +115,21 @@ fun StoreScreen() {
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(boosters) { booster ->
-                BoosterCard(booster) {
+                val canAfford = (userProfile?.points ?: 0) >= booster.cost
+                BoosterCard(booster, canAfford) {
                     scope.launch {
-                        // Here you would integrate In-App Purchases (RevenueCat / Billing Library)
-                        // For now, we simulate the purchase by updating Supabase
                         try {
                             userProfile?.let { profile ->
-                                val updated = profile.copy(pointsMultiplier = booster.multiplier)
-                                supabase.postgrest["profiles"].update(updated) {
-                                    filter { eq("id", profile.id) }
+                                if (profile.points >= booster.cost) {
+                                    val updated = profile.copy(
+                                        points = profile.points - booster.cost,
+                                        pointsMultiplier = booster.multiplier
+                                    )
+                                    supabase.postgrest["profiles"].update(updated) {
+                                        filter { eq("id", profile.id) }
+                                    }
+                                    userProfile = updated
                                 }
-                                userProfile = updated
                             }
                         } catch (e: Exception) {
                             println("Purchase error: ${e.message}")
@@ -135,20 +138,11 @@ fun StoreScreen() {
                 }
             }
         }
-        
-        Spacer(Modifier.weight(1f))
-        
-        Text(
-            "* Purchases use real currency via App Store/Play Store.",
-            fontSize = 10.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
     }
 }
 
 @Composable
-fun BoosterCard(booster: BoosterItem, onPurchase: () -> Unit) {
+fun BoosterCard(booster: BoosterItem, enabled: Boolean, onPurchase: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -177,11 +171,15 @@ fun BoosterCard(booster: BoosterItem, onPurchase: () -> Unit) {
             
             Button(
                 onClick = onPurchase,
-                colors = ButtonDefaults.buttonColors(containerColor = GreenBright),
+                enabled = enabled,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GreenBright,
+                    disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                ),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
-                Text(booster.price, fontWeight = FontWeight.Bold)
+                Text("${booster.cost} Pts", fontWeight = FontWeight.Bold)
             }
         }
     }
