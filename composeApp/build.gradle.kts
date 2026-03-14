@@ -53,11 +53,15 @@ kotlin {
             // Google Maps
             implementation("com.google.android.gms:play-services-maps:19.0.0")
             implementation("com.google.maps.android:maps-compose:6.1.2")
+            implementation("com.google.maps.android:maps-compose-utils:6.1.2") // Added for Clustering support
             implementation("com.google.android.gms:play-services-location:21.3.0")
             
             // Coil for SVG support
             implementation(libs.coil.compose)
             implementation(libs.coil.svg)
+
+            // RevenueCat Android
+            implementation("com.revenuecat.purchases:purchases:9.25.0")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -94,7 +98,9 @@ kotlin {
             }
         }
 
-        // Link platform-specific source sets to iosMain
+        // Link platform-specific source sets are usually handled by KMP plugin automatically
+        // but explicit dependsOn is often seen in older setups. 
+        // Keeping it consistent with previous state.
         val iosX64Main by getting { dependsOn(iosMain) }
         val iosArm64Main by getting { dependsOn(iosMain) }
         val iosSimulatorArm64Main by getting { dependsOn(iosMain) }
@@ -125,6 +131,8 @@ kotlin {
                     const val SUPABASE_URL = "$supabaseUrl"
                     const val SUPABASE_ANON_KEY = "$supabaseAnonKey"
                     const val GOOGLE_MAPS_API_KEY = "AIzaSyAMNxRu8E4kluchvUXLY975AzFlFIZfvU0"
+                    const val REVENUECAT_ANDROID_API_KEY = "goog_placeholder"
+                    const val REVENUECAT_IOS_API_KEY = "appl_placeholder"
                 }
             """.trimIndent())
         }

@@ -7,5 +7,7 @@ import androidx.compose.ui.Modifier
 expect fun MapView(
     modifier: Modifier = Modifier,
     batteries: List<BatteryLocation> = emptyList(),
+    friends: List<UserLocation> = emptyList(),
+    onLocationUpdate: ((Double, Double) -> Unit)? = null,
     onMapClick: ((Double, Double) -> Unit)? = null
 )

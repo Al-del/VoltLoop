@@ -114,6 +114,9 @@
 			);
 			mainGroup = 9EFA29E3E2B7A4AA2ABC3572;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				17BF35552F65C18000371992 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 36B5C5A25EB920C7FEE87975 /* Products */;
 			projectDirPath = "";
@@ -370,6 +373,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		17BF35552F65C18000371992 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.64.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = 3E692FEF83EC51EDF7B2434C /* Project object */;
 }
