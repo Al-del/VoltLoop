@@ -29,12 +29,13 @@ actual fun MapView(
         locationManager.requestWhenInUseAuthorization()
     }
 
-    // Load multiple sizes to handle different zoom levels - Increased default sizes
-    val batteryImageSmall = remember { createResizedImage("one_battery", 40.0) }  // Was 30.0
-    val batteryImageMedium = remember { createResizedImage("one_battery", 55.0) } // Was 45.0
-    val batteryImageLarge = remember { createResizedImage("one_battery", 70.0) }  // Was 60.0
+    // Load icons - use higher resolution for markers
+    val batteryImageSmall = remember { createResizedImage("one_battery", 40.0) }
+    val batteryImageMedium = remember { createResizedImage("one_battery", 55.0) }
+    val batteryImageLarge = remember { createResizedImage("one_battery", 70.0) }
+    val clusterImage = remember { createResizedImage("more_batteries", 80.0) }
 
-    val combinedDelegate = remember {
+    val combinedDelegate = remember(batteryImageSmall, batteryImageMedium, batteryImageLarge, clusterImage) {
         object : NSObject(), MKMapViewDelegateProtocol, UIGestureRecognizerDelegateProtocol {
             var hasZoomedToUser = false
 
@@ -43,7 +44,7 @@ actual fun MapView(
                 if (!hasZoomedToUser && location != null) {
                     val region = MKCoordinateRegionMakeWithDistance(
                         didUpdateUserLocation.coordinate,
-                        1000.0, // 1km zoom level
+                        1000.0,
                         1000.0
                     )
                     mapView.setRegion(region, animated = true)
@@ -52,12 +53,13 @@ actual fun MapView(
             }
 
             override fun mapView(mapView: MKMapView, regionDidChangeAnimated: Boolean) {
-                // Update all visible annotations when zoom level changes
                 mapView.annotations.forEach { annotation ->
-                    if (annotation !is MKUserLocation) {
-                        val view = mapView.viewForAnnotation(annotation as MKAnnotationProtocol)
-                        mapView.region.useContents {
-                            updateAnnotationImage(view, span.latitudeDelta)
+                    if (annotation !is MKUserLocation && annotation is MKAnnotationProtocol) {
+                        val view = mapView.viewForAnnotation(annotation)
+                        if (view != null) {
+                            mapView.region.useContents {
+                                updateAnnotationImage(view, annotation, span.latitudeDelta)
+                            }
                         }
                     }
                 }
@@ -66,30 +68,50 @@ actual fun MapView(
             override fun mapView(mapView: MKMapView, viewForAnnotation: MKAnnotationProtocol): MKAnnotationView? {
                 if (viewForAnnotation is MKUserLocation) return null
                 
+                if (viewForAnnotation is MKClusterAnnotation) {
+                    val identifier = "Cluster"
+                    var annotationView = mapView.dequeueReusableAnnotationViewWithIdentifier(identifier)
+                    if (annotationView == null) {
+                        annotationView = MKAnnotationView(viewForAnnotation, identifier)
+                        annotationView.canShowCallout = false
+                    } else {
+                        annotationView.annotation = viewForAnnotation
+                    }
+                    annotationView.image = clusterImage
+                    annotationView.displayPriority = MKFeatureDisplayPriorityRequired
+                    return annotationView
+                }
+
                 val identifier = "Battery"
                 var annotationView = mapView.dequeueReusableAnnotationViewWithIdentifier(identifier)
                 
                 if (annotationView == null) {
                     annotationView = MKAnnotationView(viewForAnnotation, identifier)
                     annotationView.canShowCallout = true
+                    // This is essential for clustering on iOS
+                    annotationView.clusteringIdentifier = "batteryCluster"
+                    annotationView.displayPriority = MKFeatureDisplayPriorityDefaultHigh
                 } else {
                     annotationView.annotation = viewForAnnotation
                 }
                 
                 mapView.region.useContents {
-                    updateAnnotationImage(annotationView, span.latitudeDelta)
+                    updateAnnotationImage(annotationView, viewForAnnotation, span.latitudeDelta)
                 }
                 return annotationView
             }
 
-            private fun updateAnnotationImage(view: MKAnnotationView?, latitudeDelta: Double) {
+            private fun updateAnnotationImage(view: MKAnnotationView?, annotation: Any?, latitudeDelta: Double) {
                 if (view == null) return
+                if (annotation is MKClusterAnnotation) {
+                    view.image = clusterImage
+                    return
+                }
                 
-                // Adjust size based on latitudeDelta (smaller delta = more zoomed in)
                 view.image = when {
-                    latitudeDelta < 0.005 -> batteryImageLarge  // Very zoomed in
-                    latitudeDelta < 0.02 -> batteryImageMedium // Medium zoom
-                    else -> batteryImageSmall                  // Zoomed out
+                    latitudeDelta < 0.005 -> batteryImageLarge
+                    latitudeDelta < 0.02 -> batteryImageMedium
+                    else -> batteryImageSmall
                 }
             }
 
@@ -127,43 +149,41 @@ actual fun MapView(
                 setPitchEnabled(true)
                 showsUserLocation = true
                 setDelegate(combinedDelegate)
+                
+                // Hide default Apple Map markers (POIs)
+                showsPointsOfInterest = false
             }
         },
         modifier = modifier,
         interactive = true,
         update = { view ->
-            // Update annotations
-            view.removeAnnotations(view.annotations)
-            val annotations = batteries.map { battery ->
-                val annotation = MKPointAnnotation()
-                annotation.setCoordinate(CLLocationCoordinate2DMake(battery.latitude, battery.longitude))
-                annotation.setTitle(battery.name)
-                annotation
+            // Efficiently update annotations only when needed to allow clustering to calculate
+            val currentAnnotations = view.annotations.filterIsInstance<MKPointAnnotation>()
+            if (currentAnnotations.size != batteries.size) {
+                view.removeAnnotations(view.annotations)
+                val newAnnotations = batteries.map { battery ->
+                    val annotation = MKPointAnnotation()
+                    annotation.setCoordinate(CLLocationCoordinate2DMake(battery.latitude, battery.longitude))
+                    annotation.setTitle(battery.name)
+                    annotation
+                }
+                view.addAnnotations(newAnnotations)
             }
-            view.addAnnotations(annotations)
 
-            // Make gestures snappy
             view.gestureRecognizers?.forEach {
                 val recognizer = it as? UIGestureRecognizer ?: return@forEach
                 recognizer.delaysTouchesBegan = false
             }
 
-            // Handle Tap Gesture updates - use the delegate as a marker to find our gesture
             val existingTap = view.gestureRecognizers?.filterIsInstance<UITapGestureRecognizer>()
                 ?.find { it.delegate == combinedDelegate }
 
-            if (onMapClick != null) {
-                if (existingTap == null) {
-                    val tapGesture = UITapGestureRecognizer(target = tapHandler, action = sel_registerName("handleTap:"))
-                    tapGesture.setDelegate(combinedDelegate)
-                    tapGesture.numberOfTapsRequired = 1u
-                    tapGesture.cancelsTouchesInView = false 
-                    tapGesture.delaysTouchesBegan = false
-                    tapGesture.delaysTouchesEnded = false
-                    view.addGestureRecognizer(tapGesture)
-                }
-            } else {
-                existingTap?.let { view.removeGestureRecognizer(it) }
+            if (onMapClick != null && existingTap == null) {
+                val tapGesture = UITapGestureRecognizer(target = tapHandler, action = sel_registerName("handleTap:"))
+                tapGesture.setDelegate(combinedDelegate)
+                tapGesture.numberOfTapsRequired = 1u
+                tapGesture.cancelsTouchesInView = false 
+                view.addGestureRecognizer(tapGesture)
             }
         }
     )
