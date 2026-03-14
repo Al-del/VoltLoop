@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    kotlin("plugin.serialization")
+    kotlin("plugin.serialization") // Fix: use version catalog alias instead of kotlin()
 }
 
 val ktorVersion = "3.0.3"
@@ -81,7 +81,7 @@ androidMain.dependencies {
             implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
             implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
             implementation("io.ktor:ktor-client-logging:$ktorVersion")
-         //   implementation(project.dependencies.platform(libs.supabase.bom))
+
             // Supabase
             implementation("io.github.jan-tennert.supabase:auth-kt:3.0.3")
             implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.3")

@@ -397,12 +397,13 @@ fun Nav_Bar_ussage() {
         }
     }
 
-    // ─── THIS IS THE CHANGED PART ───
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-
-        val showMap = selected == NavItem.Map || (previousSelected == NavItem.Map && isChatScreen)
-        if (showMap) {
+        if (selected == NavItem.Map) {
             mapLayer(batteries, friendsLocations)
+        } else {
+            if (!isChatScreen) {
+                mapLayer(batteries, friendsLocations)
+            }
         }
 
         navHostLayer()
@@ -452,7 +453,6 @@ fun Nav_Bar_ussage() {
                 GreenNavBar(
                     selected = selected,
                     onItemSelected = { item ->
-                        previousSelected = selected
                         selected = item
                         navController.navigate(item.screen.route) {
                             popUpTo(Screen.StartTrip.route) { saveState = true }
@@ -733,6 +733,77 @@ fun UserRow(
                     }
                 }
             }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(profile.displayName ?: "User", fontWeight = FontWeight.SemiBold)
+                Text(profile.email ?: "", fontSize = 12.sp, color = Color.Gray)
+            }
+            if (actionLabel != null) {
+                Button(
+                    onClick = onAction,
+                    enabled = enabled,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GreenBright,
+                        disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(actionLabel, fontSize = 12.sp)
+                }
+            }
+            if (showOptions) {
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Remove", color = Color.Red) },
+                            onClick = {
+                                showMenu = false
+                                onRemove?.invoke()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen(friendId: String, friendName: String, navController: NavController) {
+    val scope = rememberCoroutineScope()
+    var messages by remember { mutableStateOf(listOf<Message>()) }
+    var newMessage by remember { mutableStateOf("") }
+    val currentUserId = remember { supabase.auth.currentUserOrNull()?.id ?: "" }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(friendId) {
+        try {
+            val fetchedMessages = supabase.postgrest["messages"]
+                .select {
+                    filter {
+                        or {
+                            and {
+                                eq("sender_id", currentUserId)
+                                eq("receiver_id", friendId)
+                            }
+                            and {
+                                eq("sender_id", friendId)
+                                eq("receiver_id", currentUserId)
+                            }
+                        }
+                    }
+                }.decodeList<Message>()
+            messages = fetchedMessages.sortedBy { it.createdAt }
+        } catch (e: Exception) {
+            println("Error fetching messages: ${e.message}")
         }
     }
 }

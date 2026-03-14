@@ -64,16 +64,15 @@ actual fun MapView(
     batteries: List<BatteryLocation>,
     friends: List<UserLocation>,
     onLocationUpdate: ((Double, Double) -> Unit)?,
-    onMapClick: ((Double, Double) -> Unit)?,
-    onFriendChatClick: ((String, String) -> Unit)?
+    onMapClick: ((Double, Double) -> Unit)?
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-    
+
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         )
     }
 
