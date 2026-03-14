@@ -21,12 +21,11 @@ fun MapScreen_real() {
 
     ) { innerPadding ->
         Box(
-            contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            Text("This is the start map screen!!!")
+            MapView(modifier = Modifier.fillMaxSize())
         }
     }
 }

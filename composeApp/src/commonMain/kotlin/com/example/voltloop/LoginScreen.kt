@@ -1,10 +1,13 @@
 package com.example.voltloop
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.auth.auth
@@ -18,9 +21,16 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -51,6 +61,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
 
         Button(
             onClick = {
+                focusManager.clearFocus()
                 scope.launch {
                     isLoading = true
                     errorMessage = null
@@ -76,6 +87,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
 
         TextButton(
             onClick = {
+                focusManager.clearFocus()
                 scope.launch {
                     isLoading = true
                     errorMessage = null
