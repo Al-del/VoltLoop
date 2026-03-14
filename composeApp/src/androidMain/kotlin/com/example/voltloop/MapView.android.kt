@@ -11,12 +11,22 @@ import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -54,7 +64,8 @@ actual fun MapView(
     batteries: List<BatteryLocation>,
     friends: List<UserLocation>,
     onLocationUpdate: ((Double, Double) -> Unit)?,
-    onMapClick: ((Double, Double) -> Unit)?
+    onMapClick: ((Double, Double) -> Unit)?,
+    onFriendChatClick: ((String, String) -> Unit)?
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -157,11 +168,38 @@ actual fun MapView(
             val friendIcon = remember(friend.username) {
                 createFriendIcon(friend.username ?: "F", context)
             }
-            Marker(
+            MarkerInfoWindow(
                 state = MarkerState(position = LatLng(friend.latitude, friend.longitude)),
-                title = friend.username,
-                icon = friendIcon
-            )
+                icon = friendIcon,
+                onInfoWindowClick = {
+                    onFriendChatClick?.invoke(friend.id, friend.username ?: "Friend")
+                }
+            ) {
+                // Custom Info Window
+                Box(
+                    modifier = Modifier
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                        .padding(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = friend.username ?: "Friend",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            fontSize = 14.sp
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = "Chat",
+                            tint = Color(0xFF15803D), // GreenBright
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
         }
 
         if (oneBitmap != null && moreBitmap != null) {

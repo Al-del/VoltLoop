@@ -216,6 +216,7 @@ private fun NavButton(
 fun Nav_Bar_ussage() {
     val navController = rememberNavController()
     var selected by remember { mutableStateOf(NavItem.StartTrip) }
+    var previousSelected by remember { mutableStateOf(NavItem.StartTrip) }
     val scope = rememberCoroutineScope()
 
     var isAdmin by remember { mutableStateOf(false) }
@@ -228,6 +229,21 @@ fun Nav_Bar_ussage() {
     val currentRoute = navBackStackEntry?.destination?.route
     val isChatScreen = currentRoute?.startsWith("chat/") == true
 
+    val selectedRef = remember { mutableStateOf(selected) }
+    LaunchedEffect(selected) { selectedRef.value = selected }
+
+    LaunchedEffect(currentRoute) {
+        when {
+            currentRoute == Screen.Settings.route -> { previousSelected = selected; selected = NavItem.Settings }
+            currentRoute == Screen.Friends.route -> { previousSelected = selected; selected = NavItem.Friends }
+            currentRoute == Screen.Map.route -> { previousSelected = selected; selected = NavItem.Map }
+            currentRoute == Screen.StartTrip.route -> { previousSelected = selected; selected = NavItem.StartTrip }
+            currentRoute == Screen.Store.route -> { previousSelected = selected; selected = NavItem.Store }
+            currentRoute?.startsWith("chat/") == true -> { previousSelected = selected }
+            currentRoute == null -> selected = previousSelected
+        }
+    }
+
     LaunchedEffect(Unit) {
         val user = supabase.auth.currentUserOrNull()
         isAdmin = user?.email == "admin@voltloop.com"
@@ -237,7 +253,6 @@ fun Nav_Bar_ussage() {
     LaunchedEffect(Unit) {
         val json = Json { ignoreUnknownKeys = true }
 
-        // Initial fetches
         try {
             batteries = supabase.postgrest["battery_locations"].select().decodeList<BatteryLocation>()
 
@@ -274,21 +289,16 @@ fun Nav_Bar_ussage() {
             println("Error fetching initial data: ${e.message}")
         }
 
-        // Real-time location subscription
         val locChannel = supabase.channel("locations_channel")
         val locFlow = locChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "user_locations"
         }
-
         locFlow.onEach { action: PostgresAction ->
             if (action is PostgresAction.Insert || action is PostgresAction.Update) {
                 val updatedLoc = json.decodeFromJsonElement<UserLocation>(action.record)
-
                 if (friendsLocations.none { it.id == updatedLoc.id }) return@onEach
-
                 val existingUsername = friendsLocations.find { it.id == updatedLoc.id }?.username
                 val locWithUsername = updatedLoc.copy(username = existingUsername ?: "Friend")
-
                 friendsLocations = if (friendsLocations.any { it.id == updatedLoc.id }) {
                     friendsLocations.map { if (it.id == updatedLoc.id) locWithUsername else it }
                 } else {
@@ -298,7 +308,6 @@ fun Nav_Bar_ussage() {
         }.launchIn(this)
         locChannel.subscribe()
 
-        // Battery updates subscription
         val batChannel = supabase.channel("batteries_channel")
         val batFlow = batChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "battery_locations"
@@ -352,7 +361,15 @@ fun Nav_Bar_ussage() {
                             println("Error adding battery: ${e.message}")
                         }
                     }
-                } else null
+                } else null,
+                onFriendChatClick = { friendId, friendName ->
+                    if (selectedRef.value == NavItem.Map) {
+                        navController.navigate(Screen.Map.route) {
+                            launchSingleTop = true
+                        }
+                    }
+                    navController.navigate(Screen.Chat.createRoute(friendId, friendName))
+                }
             )
         }
     }
@@ -380,13 +397,12 @@ fun Nav_Bar_ussage() {
         }
     }
 
+    // ─── THIS IS THE CHANGED PART ───
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        if (selected == NavItem.Map) {
+
+        val showMap = selected == NavItem.Map || (previousSelected == NavItem.Map && isChatScreen)
+        if (showMap) {
             mapLayer(batteries, friendsLocations)
-        } else {
-            if (!isChatScreen) {
-                mapLayer(batteries, friendsLocations)
-            }
         }
 
         navHostLayer()
@@ -436,6 +452,7 @@ fun Nav_Bar_ussage() {
                 GreenNavBar(
                     selected = selected,
                     onItemSelected = { item ->
+                        previousSelected = selected
                         selected = item
                         navController.navigate(item.screen.route) {
                             popUpTo(Screen.StartTrip.route) { saveState = true }
@@ -485,12 +502,10 @@ fun FriendsScreen(navController: NavController) {
                     val profile = profiles.find { it.id == otherId }
                     if (profile != null) friendship to profile else null
                 }
-
                 friendRequests = allFriendships.filter { it.status == "pending" && it.friendId == currentUserId }.mapNotNull { friendship ->
                     val profile = profiles.find { it.id == friendship.userId }
                     if (profile != null) friendship to profile else null
                 }
-
                 sentRequests = allFriendships.filter { it.status == "pending" && it.userId == currentUserId }.mapNotNull { friendship ->
                     val profile = profiles.find { it.id == friendship.friendId }
                     if (profile != null) friendship to profile else null

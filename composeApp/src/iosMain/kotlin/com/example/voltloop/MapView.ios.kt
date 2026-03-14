@@ -28,7 +28,8 @@ actual fun MapView(
     batteries: List<BatteryLocation>,
     friends: List<UserLocation>,
     onLocationUpdate: ((Double, Double) -> Unit)?,
-    onMapClick: ((Double, Double) -> Unit)?
+    onMapClick: ((Double, Double) -> Unit)?,
+    onFriendChatClick: ((String, String) -> Unit)?
 ) {
     val locationManager = remember { CLLocationManager() }
     
@@ -86,6 +87,11 @@ actual fun MapView(
                     if (annotationView == null) {
                         annotationView = MKAnnotationView(viewForAnnotation, identifier)
                         annotationView.canShowCallout = true
+                        
+                        // Add chat button to callout
+                        val btn = UIButton.buttonWithType(UIButtonTypeDetailDisclosure)
+                        btn.setImage(UIImage.systemImageNamed("message.fill"), forState = UIControlStateNormal)
+                        annotationView.rightCalloutAccessoryView = btn
                     } else {
                         annotationView.annotation = viewForAnnotation
                     }
@@ -116,6 +122,13 @@ actual fun MapView(
                 }
 
                 return null
+            }
+
+            override fun mapView(mapView: MKMapView, annotationView: MKAnnotationView, calloutAccessoryControlTapped: UIControl) {
+                val annotation = annotationView.annotation
+                if (annotation is FriendAnnotation) {
+                    onFriendChatClick?.invoke(annotation.friendId, annotation.username)
+                }
             }
 
             @Suppress("PARAMETER_NAME_CHANGED_ON_OVERRIDE")
@@ -171,9 +184,8 @@ actual fun MapView(
                 if (friends.none { it.id == ann.friendId }) view.removeAnnotation(ann)
             }
 
-            // Sync Stations - Improved ID handling to prevent disappearing
+            // Sync Stations
             batteries.forEach { battery ->
-                // Use a fallback stable identifier if ID is null (e.g. for new placements)
                 val batteryId = battery.id ?: "${battery.latitude},${battery.longitude}"
                 val existing = currentAnnotations.filterIsInstance<StationAnnotation>().find { it.stationId == batteryId }
                 
@@ -187,7 +199,6 @@ actual fun MapView(
                 }
             }
             
-            // Only remove if it strictly doesn't exist in the data anymore
             currentAnnotations.filterIsInstance<StationAnnotation>().forEach { ann ->
                 val exists = batteries.any { (it.id ?: "${it.latitude},${it.longitude}") == ann.stationId }
                 if (!exists) view.removeAnnotation(ann)
