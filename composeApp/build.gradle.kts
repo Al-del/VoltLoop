@@ -6,10 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    kotlin("plugin.serialization") version "2.0.0"  // ← add this
-}
-val ktorVersion = "2.3.12"
-    kotlin("plugin.serialization") version "2.1.0"
+    kotlin("plugin.serialization")
 }
 
 val ktorVersion = "3.0.3"
@@ -27,12 +24,10 @@ kotlin {
         }
     }
 
-    // Define all iOS targets
     iosX64()
     iosArm64()
     iosSimulatorArm64()
 
-    // Configure the framework for Xcode
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
         binaries.framework {
             baseName = "ComposeApp"
@@ -47,12 +42,11 @@ kotlin {
             implementation("androidx.camera:camera-camera2:1.3.4")
             implementation("androidx.camera:camera-lifecycle:1.3.4")
             implementation("androidx.camera:camera-view:1.3.4")
-
             implementation("com.google.mlkit:barcode-scanning:17.3.0")
-
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-            implementation("io.ktor:ktor-client-okhttp:2.3.12")
+            implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
         }
+
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -61,17 +55,17 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-
             implementation(compose.materialIconsExtended)
             implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
-            implementation("io.ktor:ktor-client-core:2.3.12")
-            implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
-
+            implementation("io.ktor:ktor-client-core:$ktorVersion")
+            implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+            implementation("io.ktor:ktor-client-logging:$ktorVersion")
+         //   implementation(project.dependencies.platform(libs.supabase.bom))
             // Supabase
-            implementation(libs.supabase.auth)
-            implementation(libs.supabase.postgrest)
-            implementation(libs.supabase.realtime)
+            implementation("io.github.jan-tennert.supabase:auth-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:realtime-kt:3.0.3")
 
             // Kotlin serialization
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
@@ -79,22 +73,19 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
         }
 
-        // Define iosMain intermediate source set
         val iosMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:${ktorVersion}")
+                implementation("io.ktor:ktor-client-darwin:$ktorVersion")
             }
         }
 
-        // Link platform-specific source sets to iosMain
         val iosX64Main by getting { dependsOn(iosMain) }
         val iosArm64Main by getting { dependsOn(iosMain) }
         val iosSimulatorArm64Main by getting { dependsOn(iosMain) }
 
         commonTest.dependencies {
-         implementation(libs.kotlin.test)
-      //      implementation("io.ktor:ktor-client-darwin:2.3.12")
+            implementation(libs.kotlin.test)
         }
     }
 
