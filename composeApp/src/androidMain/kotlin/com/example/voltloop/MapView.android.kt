@@ -3,6 +3,8 @@ package com.example.voltloop
 import android.Manifest
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -13,8 +15,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.CameraPosition
@@ -42,6 +47,8 @@ data class BatteryClusterItem(
 actual fun MapView(
     modifier: Modifier,
     batteries: List<BatteryLocation>,
+    friends: List<UserLocation>,
+    onLocationUpdate: ((Double, Double) -> Unit)?,
     onMapClick: ((Double, Double) -> Unit)?
 ) {
     val context = LocalContext.current
@@ -64,8 +71,28 @@ actual fun MapView(
         position = CameraPosition.fromLatLngZoom(LatLng(1.35, 103.87), 10f)
     }
 
-    var oneBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var moreBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    // Start periodic location updates for the user
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission && onLocationUpdate != null) {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
+                .setMinUpdateIntervalMillis(3000)
+                .build()
+
+            val locationCallback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    locationResult.lastLocation?.let {
+                        onLocationUpdate(it.latitude, it.longitude)
+                    }
+                }
+            }
+
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, context.mainLooper)
+        }
+    }
+
+    // Marker icons state
+    var oneBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var moreBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(Unit) {
         try {
@@ -83,18 +110,12 @@ actual fun MapView(
         batteries.map { BatteryClusterItem(it) }
     }
 
-    // Hide default Google map labels/markers (POI and Transit)
+    // Map style to hide POIs but keep user location visible
     val mapStyle = remember {
         MapStyleOptions("""
             [
-              {
-                "featureType": "poi",
-                "stylers": [{ "visibility": "off" }]
-              },
-              {
-                "featureType": "transit",
-                "stylers": [{ "visibility": "off" }]
-              }
+              { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+              { "featureType": "transit", "stylers": [{ "visibility": "off" }] }
             ]
         """.trimIndent())
     }
@@ -119,9 +140,25 @@ actual fun MapView(
             isMyLocationEnabled = hasLocationPermission,
             mapStyleOptions = mapStyle
         ),
-        uiSettings = MapUiSettings(myLocationButtonEnabled = hasLocationPermission),
+        uiSettings = MapUiSettings(
+            myLocationButtonEnabled = hasLocationPermission,
+            zoomControlsEnabled = false,
+            compassEnabled = false
+        ),
         onMapClick = { latLng -> onMapClick?.invoke(latLng.latitude, latLng.longitude) }
     ) {
+        // Render Friends
+        friends.forEach { friend ->
+            val friendIcon = remember(friend.username) {
+                createFriendIcon(friend.username ?: "F", context)
+            }
+            Marker(
+                state = MarkerState(position = LatLng(friend.latitude, friend.longitude)),
+                title = friend.username,
+                icon = friendIcon
+            )
+        }
+
         if (oneBitmap != null && moreBitmap != null) {
             Clustering(
                 items = clusterItems,
@@ -152,4 +189,36 @@ actual fun MapView(
             )
         }
     }
+}
+
+private fun createFriendIcon(username: String, context: Context): BitmapDescriptor {
+    val density = context.resources.displayMetrics.density
+    val size = (48 * density).toInt()
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    
+    val paint = Paint()
+    paint.isAntiAlias = true
+    
+    // Background Circle
+    paint.color = 0xFF4ADE80.toInt() // GreenAccent
+    canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+    
+    // Border
+    paint.color = android.graphics.Color.WHITE
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 2 * density
+    canvas.drawCircle(size / 2f, size / 2f, (size / 2f) - (1 * density), paint)
+    
+    // Initial text
+    paint.style = Paint.Style.FILL
+    paint.textAlign = Paint.Align.CENTER
+    paint.textSize = 20 * density
+    paint.color = android.graphics.Color.WHITE
+    val initial = username.take(1).uppercase()
+    val textHeight = paint.descent() - paint.ascent()
+    val textOffset = textHeight / 2 - paint.descent()
+    canvas.drawText(initial, size / 2f, size / 2f + textOffset, paint)
+    
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
