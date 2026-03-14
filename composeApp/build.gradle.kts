@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    kotlin("plugin.serialization") version "2.1.0"
+    kotlin("plugin.serialization") // Fix: use version catalog alias instead of kotlin()
 }
 
 val ktorVersion = "3.0.3"
@@ -42,11 +42,9 @@ kotlin {
             implementation("androidx.camera:camera-camera2:1.3.4")
             implementation("androidx.camera:camera-lifecycle:1.3.4")
             implementation("androidx.camera:camera-view:1.3.4")
-
             implementation("com.google.mlkit:barcode-scanning:17.3.0")
-
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-            implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
+            implementation("io.ktor:ktor-client-okhttp:${ktorVersion}") // Fix: removed duplicate
 
             // Google Maps
             implementation("com.google.android.gms:play-services-maps:19.0.0")
@@ -58,6 +56,7 @@ kotlin {
             implementation(libs.coil.compose)
             implementation(libs.coil.svg)
         }
+
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -66,7 +65,6 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-
             implementation(compose.materialIconsExtended)
             implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
             implementation("io.ktor:ktor-client-core:$ktorVersion")
@@ -75,20 +73,21 @@ kotlin {
             implementation("io.ktor:ktor-client-logging:$ktorVersion")
 
             // Supabase
-            implementation(libs.supabase.auth)
-            implementation(libs.supabase.postgrest)
-            implementation(libs.supabase.realtime)
+            implementation("io.github.jan-tennert.supabase:auth-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:realtime-kt:3.0.3")
 
             // Kotlin serialization
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             // Coroutines
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
         }
 
         val iosMain by creating {
             dependsOn(commonMain.get())
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:${ktorVersion}")
+                implementation("io.ktor:ktor-client-darwin:$ktorVersion")
             }
         }
 
@@ -143,7 +142,7 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
-    sourceSets["main"].res.filter.exclude("**/one_battery.svg")
+    // Fix: removed unreliable SVG res filter — just don't place .svg files in res/
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

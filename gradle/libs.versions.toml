@@ -19,6 +19,7 @@ supabase = "3.0.3"
 coil = "2.7.0"
 
 [libraries]
+supabase-bom = { module = "io.github.jan-tennert.supabase:bom", version.ref = "supabase" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }

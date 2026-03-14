@@ -47,6 +47,7 @@ actual fun MapView(
         locationManager.startUpdatingLocation()
     }
 
+    // Load icons - use higher resolution for markers
     val batteryImageSmall = remember { createResizedImage("one_battery", 40.0) }
     val batteryImageMedium = remember { createResizedImage("one_battery", 55.0) }
     val batteryImageLarge = remember { createResizedImage("one_battery", 70.0) }
