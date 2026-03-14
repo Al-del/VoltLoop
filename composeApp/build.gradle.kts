@@ -49,6 +49,15 @@ kotlin {
 
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
             implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
+
+            // Google Maps
+            implementation("com.google.android.gms:play-services-maps:19.0.0")
+            implementation("com.google.maps.android:maps-compose:6.1.2")
+            implementation("com.google.android.gms:play-services-location:21.3.0")
+            
+            // Coil for SVG support
+            implementation(libs.coil.compose)
+            implementation(libs.coil.svg)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -115,6 +124,7 @@ kotlin {
                 object Secrets {
                     const val SUPABASE_URL = "$supabaseUrl"
                     const val SUPABASE_ANON_KEY = "$supabaseAnonKey"
+                    const val GOOGLE_MAPS_API_KEY = "AIzaSyAMNxRu8E4kluchvUXLY975AzFlFIZfvU0"
                 }
             """.trimIndent())
         }
@@ -136,6 +146,7 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    sourceSets["main"].res.filter.exclude("**/one_battery.svg")
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
