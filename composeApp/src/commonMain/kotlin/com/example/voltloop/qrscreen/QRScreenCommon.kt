@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.voltloop.NetworkStuff.getUsers
+import com.example.voltloop.TimerScreen
 import kotlinx.coroutines.launch
 
 data class CameraPermissionState(
@@ -151,6 +152,13 @@ private fun CornerBrackets() {
 @Composable
 private fun ResultScreen(result: String, onScanAgain: () -> Unit) {
     val scope = rememberCoroutineScope()
+    var showTimer by remember { mutableStateOf(false) }
+
+    // State-driven: swap to TimerScreen when triggered
+    if (showTimer) {
+        TimerScreen()
+        return
+    }
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
@@ -189,10 +197,11 @@ private fun ResultScreen(result: String, onScanAgain: () -> Unit) {
                         val users = getUsers()
                         users.forEach { user ->
                             println("USERS_SUCCESS: Name: ${user.name} | Email: ${user.email}")
-
+                            showTimer = true
                         }
                     } catch (e: Exception) {
                         println("USERS_ERROR: ${e.message}")  // 👈 this
+
                     }
 
 
