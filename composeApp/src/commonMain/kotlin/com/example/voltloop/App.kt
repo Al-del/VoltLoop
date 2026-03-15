@@ -25,24 +25,33 @@ fun App() {
 
     VoltLoopTheme {
         when (sessionStatus) {
-        is SessionStatus.Authenticated -> {
-            val user = (sessionStatus as SessionStatus.Authenticated).session.user
+            is SessionStatus.Authenticated -> {
+                val user = (sessionStatus as SessionStatus.Authenticated).session.user
+                AppState.currentUser.value = user
 
-            AppState.currentUser.value = user
-            
-            var needsUsername by remember { mutableStateOf(false) }
-            var isCheckingProfile by remember { mutableStateOf(true) }
+                var needsUsername by remember { mutableStateOf(false) }
+                var isCheckingProfile by remember { mutableStateOf(true) }
 
-            LaunchedEffect(user?.email) {
-                user?.email?.let { email ->
+                LaunchedEffect(user?.email) {
                     try {
+                        val email = user?.email ?: run {
+                            isCheckingProfile = false
+                            return@LaunchedEffect
+                        }
+
                         // 1. Fetch the current user's profile
                         val profile = supabase.postgrest["profiles"]
                             .select { filter { eq("email", email) } }
                             .decodeSingle<Profile>()
-                        AppState.totalPoints.value = profile.points.toInt()
 
-                        // 2. Fetch all friendships where this user is involved
+                        // Use intValue since totalPoints is mutableIntStateOf
+
+                        AppState.totalPoints.value = (profile.points ?: 0).toInt()
+
+                        // 2. Check if username is set
+                        needsUsername = profile.username.isNullOrBlank()
+
+                        // 3. Fetch friendships
                         val userId = user.id
                         val friendships = supabase.postgrest["friendships"]
                             .select {
@@ -55,55 +64,54 @@ fun App() {
                             }
                             .decodeList<Friendship>()
 
-                        // 3. Extract the friend IDs (the other side of each row)
+                        // 4. Extract friend IDs and fetch their profiles
                         val friendIds = friendships.map { friendship ->
-                            if (friendship.userId == userId) friendship.friendId
-                            else friendship.userId
+                            if (friendship.userId == userId) friendship.friendId else friendship.userId
                         }
 
-                        // 4. Fetch each friend's profile and sort by points descending
                         if (friendIds.isNotEmpty()) {
                             val friendProfiles = supabase.postgrest["profiles"]
-                                .select {
-                                    filter {
-                                        isIn("id", friendIds)
-                                    }
-                                }
+                                .select { filter { isIn("id", friendIds) } }
                                 .decodeList<Profile>()
-
                             AppState.friends.value = friendProfiles.sortedByDescending { it.points }
                         }
+
                         println("FRIENDS_LIST: ${AppState.friends.value.map { "${it.username} - ${it.points} pts" }}")
+
                     } catch (e: Exception) {
                         println("FETCH_ERROR: ${e.message}")
+                    } finally {
+                        // ← FIXED: always set to false so loading screen goes away
+                        isCheckingProfile = false
+                    }
+                }
+
+                when {
+                    isCheckingProfile -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    needsUsername -> {
+                        SetUsernameScreen(onComplete = { needsUsername = false })
+                    }
+                    else -> {
+                        Nav_Bar_ussage()
                     }
                 }
             }
 
-            if (isCheckingProfile) {
+            is SessionStatus.Initializing -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-            } else if (needsUsername) {
-                SetUsernameScreen(
-                    onComplete = {
-                        needsUsername = false
-                    }
-                )
-            } else {
-                Nav_Bar_ussage()
+            }
+
+            else -> {
+                LoginScreen(onLoginSuccess = {})
             }
         }
-        is SessionStatus.Initializing -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        }
-        else -> {
-            LoginScreen(onLoginSuccess = {})
-        }
-    } // end when
-    } // end VoltLoopTheme
+    }
 }
 
 @Composable
@@ -136,14 +144,14 @@ fun SetUsernameScreen(onComplete: () -> Unit) {
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it.filter { c -> c.isLetterOrDigit() || c == '_' } },
-                    placeholder = { androidx.compose.material3.Text("username", color = Color.Gray) },
+                    placeholder = { Text("username", color = Color.Gray) },
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFF5F5F5),
+                        focusedContainerColor   = Color(0xFFF5F5F5),
                         unfocusedContainerColor = Color(0xFFF5F5F5),
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
+                        focusedBorderColor      = Color.Transparent,
+                        unfocusedBorderColor    = Color.Transparent
                     ),
                     singleLine = true
                 )
@@ -157,7 +165,6 @@ fun SetUsernameScreen(onComplete: () -> Unit) {
                             isLoading = true
                             errorMessage = null
                             try {
-                                // Try UPDATE first (profile likely exists from trigger)
                                 supabase.postgrest["profiles"]
                                     .update({
                                         set("username", username)
@@ -167,7 +174,6 @@ fun SetUsernameScreen(onComplete: () -> Unit) {
                                     }
                                 onComplete()
                             } catch (e: Exception) {
-                                // Fallback: try upsert (if profile doesn't exist yet)
                                 try {
                                     supabase.postgrest["profiles"].upsert(
                                         buildJsonObject {
@@ -192,16 +198,12 @@ fun SetUsernameScreen(onComplete: () -> Unit) {
                     contentPadding = PaddingValues()
                 ) {
                     if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                    else androidx.compose.material3.Text("→", color = Color.White, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    else Text("→", color = Color.White, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
 
             if (errorMessage != null) {
-                Text(
-                    errorMessage!!,
-                    color = Color.Red,
-                    fontSize = 13.sp
-                )
+                Text(errorMessage!!, color = Color.Red, fontSize = 13.sp)
             }
         }
     }
