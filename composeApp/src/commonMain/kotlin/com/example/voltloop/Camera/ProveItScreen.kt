@@ -9,6 +9,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -67,7 +74,7 @@ fun ProveItScreen(
                     .padding(24.dp),
                 contentAlignment = Alignment.TopStart
             ) {
-                IconTextButton(label = "✕  Cancel", onClick = onDismiss)
+                IconTextButton(label = "Cancel", icon = Icons.Default.Close, onClick = onDismiss)
             }
         }
 
@@ -86,7 +93,7 @@ fun ProveItScreen(
                                     onProved(b64)
                                     captureState = CaptureState.SUCCESS
                                 } else {
-                                    errorMessage = "❌ Not accepted (score: ${response.similarity})"
+                                    errorMessage = "Not accepted (score: ${response.similarity})"
 
                                     captureState = CaptureState.ERROR
                                 }
@@ -112,7 +119,7 @@ fun ProveItScreen(
 
         if (captureState == CaptureState.SUCCESS) {
             ResultOverlay(
-                icon     = "✅",
+                icon     = Icons.Default.CheckCircle,
                 title    = "Proof submitted!",
                 subtitle = proofShape,
                 color    = AccentGreen,
@@ -122,7 +129,7 @@ fun ProveItScreen(
 
         if (captureState == CaptureState.ERROR) {
             ResultOverlay(
-                icon     = "❌",
+                icon     = Icons.Default.Cancel,
                 title    = errorMessage ?: "Something went wrong",
                 subtitle = if (errorMessage?.contains("score") == true) "Try taking a clearer photo that matches the challenge" else null,
                 color    = AccentRed,
@@ -163,13 +170,22 @@ private fun ChallengeLabelOverlay(text: String) {
                     .border(1.dp, AccentCyan.copy(alpha = pulse), RoundedCornerShape(50.dp))
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = "📷  PROVE IT",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 3.sp,
-                    color = AccentCyan
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "PROVE IT",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 3.sp,
+                        color = AccentCyan
+                    )
+                }
             }
 
             Box(
@@ -208,7 +224,12 @@ private fun ReviewScreen(
         verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("📸", fontSize = 64.sp)
+        Icon(
+            imageVector = Icons.Default.Camera,
+            contentDescription = null,
+            tint = AccentCyan,
+            modifier = Modifier.size(64.dp)
+        )
 
         Text(
             text = "Photo captured!",
@@ -291,7 +312,7 @@ private fun LoadingOverlay(message: String) {
 }
 
 @Composable
-private fun ResultOverlay(icon: String, title: String, subtitle: String?, color: Color, onClose: () -> Unit) {
+private fun ResultOverlay(icon: ImageVector, title: String, subtitle: String?, color: Color, onClose: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxSize().background(BgDark),
         contentAlignment = Alignment.Center
@@ -300,7 +321,12 @@ private fun ResultOverlay(icon: String, title: String, subtitle: String?, color:
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(icon, fontSize = 64.sp)
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(64.dp)
+            )
             Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color, textAlign = TextAlign.Center)
             if (subtitle != null) {
                 Text(
@@ -323,12 +349,20 @@ private fun ResultOverlay(icon: String, title: String, subtitle: String?, color:
 }
 
 @Composable
-private fun IconTextButton(label: String, onClick: () -> Unit) {
+private fun IconTextButton(label: String, icon: ImageVector, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = TextPrimary)
     ) {
-        Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
     }
 }

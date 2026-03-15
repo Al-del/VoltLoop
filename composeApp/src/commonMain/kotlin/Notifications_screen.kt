@@ -8,6 +8,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -154,20 +157,29 @@ fun NotificationsScreen(onBackClick: () -> Unit = {}) {
                     modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No notifications yet 📭",
-                        color = textSecondary,
-                        fontSize = 15.sp
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Inbox,
+                            contentDescription = null,
+                            tint = textSecondary,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "No notifications yet",
+                            color = textSecondary,
+                            fontSize = 15.sp
+                        )
+                    }
                 }
             }
         }
 
         // ── Notification cards ─────────────────────────────────
         items(notifications, key = { it.id }) { notif ->
-            val (emoji, iconBg) = when (notif.type) {
-                NotificationType.POINTS  -> "⚡" to Color(0xFFE8F6FD)
-                NotificationType.MESSAGE -> "💬" to Color(0xFFE8F6FD)
+            val (icon, iconBg) = when (notif.type) {
+                NotificationType.POINTS  -> Icons.Default.FlashOn to Color(0xFFE8F6FD)
+                NotificationType.MESSAGE -> Icons.Default.Chat to Color(0xFFE8F6FD)
             }
             Surface(
                 modifier = Modifier
@@ -187,7 +199,14 @@ fun NotificationsScreen(onBackClick: () -> Unit = {}) {
                             .clip(CircleShape)
                             .background(iconBg),
                         contentAlignment = Alignment.Center
-                    ) { Text(emoji, fontSize = 20.sp) }
+                    ) { 
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = blueAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
 
                     Spacer(Modifier.width(14.dp))
 

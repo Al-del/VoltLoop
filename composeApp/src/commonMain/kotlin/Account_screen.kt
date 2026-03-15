@@ -11,6 +11,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -261,7 +264,16 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2B8CD1)), // Darker blue
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                             ) {
-                                Text("Edit Profile ✏️", fontSize = 12.sp, color = Color.White)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Edit Profile", fontSize = 12.sp, color = Color.White)
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = Color.White
+                                    )
+                                }
                             }
                         }
                     }
@@ -298,7 +310,12 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
                                 .background(BlueSoft),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("🔔", fontSize = 18.sp)
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = BlueAccent
+                            )
                         }
                         Spacer(Modifier.width(16.dp))
                         Text(

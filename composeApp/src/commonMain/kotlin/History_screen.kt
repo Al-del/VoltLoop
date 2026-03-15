@@ -11,6 +11,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.SentimentDissatisfied
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,13 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import io.github.jan.supabase.postgrest.postgrest
 
 private val BlueAccent  = Color(0xFF43BBF7)
@@ -117,13 +122,15 @@ fun HistoryScreen() {
                         ) {
                             Row {
                                 ToggleTab(
-                                    label = "⚡  History",
+                                    label = "History",
+                                    icon = Icons.Default.History,
                                     selected = !showLeaderboard,
                                     onClick = { showLeaderboard = false }
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 ToggleTab(
-                                    label = "🏆  Leaderboard",
+                                    label = "Leaderboard",
+                                    icon = Icons.Default.EmojiEvents,
                                     selected = showLeaderboard,
                                     onClick = { showLeaderboard = true }
                                 )
@@ -152,7 +159,7 @@ fun HistoryScreen() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No trips yet ⚡\nStart riding to see your history!",
+                            text = "No trips yet\nStart riding to see your history!",
                             color = TextSecond,
                             fontSize = 15.sp,
                             textAlign = TextAlign.Center
@@ -206,12 +213,21 @@ fun HistoryScreen() {
                         modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No friends yet \uD83D\uDE22\nAdd some to see rankings!",
-                            color = TextSecond,
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.SentimentDissatisfied,
+                                contentDescription = null,
+                                tint = TextSecond,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "No friends yet\nAdd some to see rankings!",
+                                color = TextSecond,
+                                fontSize = 15.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             } else {
@@ -228,7 +244,7 @@ fun HistoryScreen() {
 
 // ── Toggle tab button ────────────────────────────────────────
 @Composable
-fun ToggleTab(label: String, selected: Boolean, onClick: () -> Unit) {
+fun ToggleTab(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
     val bgColor by animateColorAsState(
         targetValue = if (selected) BlueAccent else Color.Transparent,
         animationSpec = tween(200)
@@ -249,12 +265,21 @@ fun ToggleTab(label: String, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = textColor
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = textColor
+            )
+        }
     }
 }
 
@@ -280,7 +305,14 @@ fun TripCard(trip: TripHistory) {
             Box(
                 modifier = Modifier.size(44.dp).clip(CircleShape).background(BlueSoft),
                 contentAlignment = Alignment.Center
-            ) { Text("⚡", fontSize = 20.sp) }
+            ) { 
+                Icon(
+                    imageVector = Icons.Default.FlashOn,
+                    contentDescription = null,
+                    tint = BlueAccent,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
             Spacer(Modifier.width(14.dp))
 
@@ -317,14 +349,18 @@ fun PodiumRow(friends: List<Profile>) {
             val profile    = friends[friendIndex]
             val rank       = friendIndex + 1
             val medalColor = when (rank) { 1 -> GoldColor; 2 -> SilverColor; else -> BronzeColor }
-            val medal      = when (rank) { 1 -> "🥇"; 2 -> "🥈"; else -> "🥉" }
             val displayName = profile.username?.takeIf { it.isNotBlank() } ?: profile.email?.substringBefore("@") ?: "?"
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(medal, fontSize = if (rank == 1) 28.sp else 22.sp)
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = null,
+                    tint = medalColor,
+                    modifier = Modifier.size(if (rank == 1) 32.dp else 24.dp)
+                )
                 Spacer(Modifier.height(4.dp))
 
                 Box(
