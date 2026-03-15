@@ -40,7 +40,6 @@ import kotlinx.datetime.Clock
 // ── Shared palette ────────────────────────────────────────────
 private val BlueAccent  = Color(0xFF43BBF7)
 private val BlueSoft    = Color(0xFFE8F6FD)
-private val BlueMid     = Color(0xFFB3E5FC)
 private val GreenAccent = Color(0xFF26C97A)
 private val GreenSoft   = Color(0xFFE8F8F1)
 private val AmberAccent = Color(0xFFFFB830)
@@ -59,6 +58,7 @@ private data class EcoEvent(
     val proved: Boolean = false
 )
 
+// ── Sync points FROM Supabase into AppState ───────────────────
 suspend fun syncPointsFromDb() {
     try {
         val email = AppState.currentUser.value?.email ?: return
@@ -72,14 +72,25 @@ suspend fun syncPointsFromDb() {
     }
 }
 
+// ── Push updated points TO Supabase, then re-sync to confirm ─
 private suspend fun pushPointsToDb(newPoints: Int) {
     try {
         val email = AppState.currentUser.value?.email ?: return
+
+        // 1. Write new value
         supabase.postgrest["profiles"]
             .update({ set("points", newPoints) }) {
                 filter { eq("email", email) }
             }
         println("POINTS_UPDATED_DB: $newPoints")
+
+        // 2. Re-read from DB so AppState reflects the true persisted value
+        val confirmed = supabase.postgrest["profiles"]
+            .select { filter { eq("email", email) } }
+            .decodeSingle<Profile>()
+        AppState.totalPoints.value = (confirmed.points ?: 0) as Int
+        println("POINTS_CONFIRMED_DB: ${AppState.totalPoints.value}")
+
     } catch (e: Exception) {
         println("POINTS_UPDATE_ERROR: ${e.message}")
     }
@@ -179,7 +190,6 @@ fun TimerScreen() {
                         )
                     }
 
-                    // Points pill
                     Surface(
                         shape = RoundedCornerShape(50.dp),
                         color = AmberSoft
@@ -231,7 +241,7 @@ fun TimerScreen() {
             Spacer(Modifier.height(16.dp))
         }
 
-        // ── Duration adjuster (IDLE only) ─────────────────────
+        // ── Duration adjuster (IDLE only) ────────────────────
         if (state == TimerState.IDLE) {
             item {
                 Surface(
@@ -277,15 +287,21 @@ fun TimerScreen() {
                 DoneBanner(
                     provedCount = provedCount,
                     totalCount  = events.size,
-                    onDismiss   = {
-                        val earned    = (provedCount * 10) + 5
-                        val newPoints = AppState.totalPoints.value + earned
-                        AppState.totalPoints.value = newPoints
-                        scope.launch { pushPointsToDb(newPoints) }
-                        state          = TimerState.IDLE
-                        secondsLeft    = totalSeconds
-                        runningSeconds = 0
-                        events.clear()
+                    onDismiss   = { earned ->
+                        scope.launch {
+                            // 1. Optimistically update UI right away
+                            val newPoints = AppState.totalPoints.value + earned
+                            AppState.totalPoints.value = newPoints
+
+                            // 2. Persist to DB and re-read the confirmed value
+                            pushPointsToDb(newPoints)
+
+                            // 3. Reset timer state AFTER DB confirmed
+                            state          = TimerState.IDLE
+                            secondsLeft    = totalSeconds
+                            runningSeconds = 0
+                            events.clear()
+                        }
                     }
                 )
                 Spacer(Modifier.height(16.dp))
@@ -338,7 +354,6 @@ fun TimerScreen() {
         }
     }
 
-    // ── Prove it overlay ──────────────────────────────────────
     provingEvent?.let { event ->
         ProveItScreen(
             challengeText = event.text,
@@ -372,17 +387,14 @@ private fun ClockDisplay(secondsLeft: Int, state: TimerState, accentColor: Color
     Box(
         modifier = Modifier
             .size(210.dp)
-            .shadow(
-                16.dp, CircleShape,
+            .shadow(16.dp, CircleShape,
                 ambientColor = accentColor.copy(alpha = 0.25f),
-                spotColor    = accentColor.copy(alpha = 0.25f)
-            )
+                spotColor    = accentColor.copy(alpha = 0.25f))
             .clip(CircleShape)
             .background(CardBg)
             .border(3.dp, accentColor.copy(alpha = 0.35f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        // Inner soft ring
         Box(
             modifier = Modifier
                 .size(180.dp)
@@ -392,11 +404,11 @@ private fun ClockDisplay(secondsLeft: Int, state: TimerState, accentColor: Color
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text       = timeStr,
-                    fontSize   = (48 * scale).sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = TextPrimary,
-                    textAlign  = TextAlign.Center,
+                    text          = timeStr,
+                    fontSize      = (48 * scale).sp,
+                    fontWeight    = FontWeight.ExtraBold,
+                    color         = TextPrimary,
+                    textAlign     = TextAlign.Center,
                     letterSpacing = 2.sp
                 )
                 Text(
@@ -406,9 +418,9 @@ private fun ClockDisplay(secondsLeft: Int, state: TimerState, accentColor: Color
                         TimerState.PAUSED  -> "paused"
                         TimerState.DONE    -> "done!"
                     },
-                    fontSize   = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = accentColor,
+                    fontSize      = 12.sp,
+                    fontWeight    = FontWeight.SemiBold,
+                    color         = accentColor,
                     letterSpacing = 2.sp
                 )
             }
@@ -471,12 +483,12 @@ private fun DurationAdjuster(totalSeconds: Int, onValueChange: (Int) -> Unit) {
             else                   -> "${totalSeconds / 60}m ${totalSeconds % 60}s"
         }
         Text(
-            text      = label,
-            fontSize  = 28.sp,
+            text       = label,
+            fontSize   = 28.sp,
             fontWeight = FontWeight.ExtraBold,
-            color     = BlueAccent,
-            modifier  = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
+            color      = BlueAccent,
+            modifier   = Modifier.fillMaxWidth(),
+            textAlign  = TextAlign.Center
         )
 
         Slider(
@@ -499,23 +511,21 @@ private fun DurationAdjuster(totalSeconds: Int, onValueChange: (Int) -> Unit) {
                 val isSelected  = preset == totalSeconds
                 val presetLabel = if (preset < 60) "${preset}s" else "${preset / 60}m"
                 Surface(
-                    onClick     = { onValueChange(preset) },
-                    modifier    = Modifier.weight(1f),
-                    shape       = RoundedCornerShape(10.dp),
-                    color       = if (isSelected) BlueSoft else PageBg,
-                    border      = androidx.compose.foundation.BorderStroke(
+                    onClick   = { onValueChange(preset) },
+                    modifier  = Modifier.weight(1f),
+                    shape     = RoundedCornerShape(10.dp),
+                    color     = if (isSelected) BlueSoft else PageBg,
+                    border    = androidx.compose.foundation.BorderStroke(
                         1.5.dp, if (isSelected) BlueAccent else Color.Transparent
                     )
                 ) {
                     Text(
-                        text      = presetLabel,
-                        fontSize  = 12.sp,
+                        text       = presetLabel,
+                        fontSize   = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color     = if (isSelected) BlueAccent else TextSecond,
-                        modifier  = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                        textAlign = TextAlign.Center
+                        color      = if (isSelected) BlueAccent else TextSecond,
+                        modifier   = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        textAlign  = TextAlign.Center
                     )
                 }
             }
@@ -544,8 +554,7 @@ private fun ControlButtons(
             colors   = ButtonDefaults.outlinedButtonColors(contentColor = TextSecond),
             border   = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFDDE3EA))
         ) {
-            Icon(Icons.Filled.Refresh, contentDescription = null,
-                modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text("Reset", fontWeight = FontWeight.SemiBold)
         }
@@ -580,11 +589,15 @@ private fun ControlButtons(
 }
 
 // ── Done banner ───────────────────────────────────────────────
+// onDismiss now passes back the earned points so the caller owns the DB write
 @Composable
-private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit) {
-    val scope   = rememberCoroutineScope()
-    var locking by remember { mutableStateOf(false) }
-
+private fun DoneBanner(
+    provedCount: Int,
+    totalCount: Int,
+    onDismiss: (earned: Int) -> Unit        // ← passes earned points up
+) {
+    val scope        = rememberCoroutineScope()
+    var locking      by remember { mutableStateOf(false) }
     val pointsEarned = (provedCount * 10) + 5
 
     Surface(
@@ -600,7 +613,6 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Icon
             Box(
                 modifier = Modifier
                     .size(64.dp)
@@ -620,17 +632,17 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
             }
 
             Text(
-                text       = "Return your battery!",
+                "Return your battery!",
                 fontSize   = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color      = TextPrimary,
                 textAlign  = TextAlign.Center
             )
             Text(
-                text      = "Head to the nearest drop-off point\nand place your battery in the bin.",
-                fontSize  = 14.sp,
-                color     = TextSecond,
-                textAlign = TextAlign.Center,
+                "Head to the nearest drop-off point\nand place your battery in the bin.",
+                fontSize   = 14.sp,
+                color      = TextSecond,
+                textAlign  = TextAlign.Center,
                 lineHeight = 20.sp
             )
 
@@ -639,7 +651,6 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Challenges stat
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape    = RoundedCornerShape(16.dp),
@@ -650,7 +661,7 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text       = "$provedCount/$totalCount",
+                            "$provedCount/$totalCount",
                             fontSize   = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color      = if (provedCount == totalCount) GreenAccent else AmberAccent
@@ -659,7 +670,6 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                     }
                 }
 
-                // Points stat
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape    = RoundedCornerShape(16.dp),
@@ -674,25 +684,30 @@ private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit)
                                 tint = AmberAccent, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(2.dp))
                             Text(
-                                text       = "+$pointsEarned",
+                                "+$pointsEarned",
                                 fontSize   = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color      = AmberAccent
                             )
                         }
-                        Text("points", fontSize = 12.sp, color = TextSecond)
+                        Text("points earned", fontSize = 12.sp, color = TextSecond)
                     }
                 }
             }
 
-            // CTA button
+            // CTA — lock locker, then hand earned pts back to parent for DB write
             Button(
                 onClick  = {
                     scope.launch {
                         locking = true
-                        try { lockLocker() }
-                        catch (e: Exception) { println("LOCK_ERROR: ${e.message}") }
-                        finally { locking = false; onDismiss() }
+                        try {
+                            lockLocker()                // lock the physical locker
+                        } catch (e: Exception) {
+                            println("LOCK_ERROR: ${e.message}")
+                        } finally {
+                            locking = false
+                            onDismiss(pointsEarned)     // ← parent writes + re-syncs DB
+                        }
                     }
                 },
                 enabled  = !locking,
@@ -734,7 +749,6 @@ private fun EventCard(event: EcoEvent, onProve: () -> Unit, isLocked: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Status dot
             Box(
                 modifier = Modifier
                     .size(10.dp)
