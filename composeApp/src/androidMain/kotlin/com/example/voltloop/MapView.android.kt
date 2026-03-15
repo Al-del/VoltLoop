@@ -202,7 +202,7 @@ actual fun MapView(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Chat,
                             contentDescription = "Chat",
-                            tint = Color(0xFF15803D), // GreenBright
+                            tint = Color(0xFF43BBF7), // Lightning Blue
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -252,7 +252,7 @@ private fun createFriendIcon(username: String, context: Context): BitmapDescript
     paint.isAntiAlias = true
     
     // Background Circle
-    paint.color = 0xFF4ADE80.toInt() // GreenAccent
+    paint.color = 0xFF43BBF7.toInt() // Lightning Blue
     canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
     
     // Border
