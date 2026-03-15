@@ -24,7 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 @Composable
 fun Start_Trip() {
-    var selected by remember { mutableStateOf(NavItem.StartTrip) }
+    var selected by remember { mutableStateOf(NavItem.Map) }
 
     Scaffold(
     ) { innerPadding ->
