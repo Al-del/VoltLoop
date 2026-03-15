@@ -9,6 +9,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,19 +33,23 @@ import com.example.voltloop.Camera.ProveItScreen
 import com.example.voltloop.NetworkStuff.getEvent
 import com.example.voltloop.NetworkStuff.lockLocker
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
-private val BgDark      = Color(0xFF0D0F14)
-private val SurfaceDark = Color(0xFF161920)
-private val AccentCyan  = Color(0xFF00E5FF)
-private val AccentGreen = Color(0xFF00FF9C)
-private val AccentAmber = Color(0xFFFFB830)
-private val AccentRed   = Color(0xFFFF3D5A)
-private val TextPrimary = Color(0xFFE8EAF0)
-private val TextMuted   = Color(0xFF6B7280)
+// ── Shared palette ────────────────────────────────────────────
+private val BlueAccent  = Color(0xFF43BBF7)
+private val BlueSoft    = Color(0xFFE8F6FD)
+private val BlueMid     = Color(0xFFB3E5FC)
+private val GreenAccent = Color(0xFF26C97A)
+private val GreenSoft   = Color(0xFFE8F8F1)
+private val AmberAccent = Color(0xFFFFB830)
+private val AmberSoft   = Color(0xFFFFF3E0)
+private val RedAccent   = Color(0xFFE53935)
+private val TextPrimary = Color(0xFF1A1A1A)
+private val TextSecond  = Color(0xFF888888)
+private val CardBg      = Color(0xFFFFFFFF)
+private val PageBg      = Color(0xFFF4F6F8)
 
 private enum class TimerState { IDLE, RUNNING, PAUSED, DONE }
 
@@ -47,7 +59,6 @@ private data class EcoEvent(
     val proved: Boolean = false
 )
 
-// ── Sync points FROM Supabase into AppState (call on login / app start) ───────
 suspend fun syncPointsFromDb() {
     try {
         val email = AppState.currentUser.value?.email ?: return
@@ -61,7 +72,6 @@ suspend fun syncPointsFromDb() {
     }
 }
 
-// ── Push updated points TO Supabase ──────────────────────────────────────────
 private suspend fun pushPointsToDb(newPoints: Int) {
     try {
         val email = AppState.currentUser.value?.email ?: return
@@ -77,23 +87,18 @@ private suspend fun pushPointsToDb(newPoints: Int) {
 
 @Composable
 fun TimerScreen() {
-
     var totalSeconds   by remember { mutableStateOf(60) }
     var secondsLeft    by remember { mutableStateOf(totalSeconds) }
     var state          by remember { mutableStateOf(TimerState.IDLE) }
     var provingEvent   by remember { mutableStateOf<EcoEvent?>(null) }
     var runningSeconds by remember { mutableStateOf(0) }
-    val totalPoints    by AppState.totalPoints   // reads globally, recomposes on change
+    val totalPoints    by AppState.totalPoints
 
     val scope  = rememberCoroutineScope()
     val events = remember { mutableStateListOf<EcoEvent>() }
 
-    // ── Sync points from DB when screen first loads ───────────────────────────
-    LaunchedEffect(Unit) {
-        syncPointsFromDb()
-    }
+    LaunchedEffect(Unit) { syncPointsFromDb() }
 
-    // ── Timer tick ────────────────────────────────────────────────────────────
     LaunchedEffect(state) {
         if (state == TimerState.RUNNING) {
             while (secondsLeft > 0 && state == TimerState.RUNNING) {
@@ -104,16 +109,13 @@ fun TimerScreen() {
         }
     }
 
-    // ── Periodic event fetch: every 60 s of actual running time ──────────────
     LaunchedEffect(state) {
         if (state == TimerState.RUNNING) {
             if (runningSeconds == 0) {
                 try {
                     val response = getEvent()
                     events.add(EcoEvent(id = Clock.System.now().toEpochMilliseconds(), text = response.event))
-                } catch (e: Exception) {
-                    println("EVENT_ERROR: ${e.message}")
-                }
+                } catch (e: Exception) { println("EVENT_ERROR: ${e.message}") }
             }
             while (state == TimerState.RUNNING) {
                 delay(1_000L)
@@ -122,9 +124,7 @@ fun TimerScreen() {
                     try {
                         val response = getEvent()
                         events.add(EcoEvent(id = Clock.System.now().toEpochMilliseconds(), text = response.event))
-                    } catch (e: Exception) {
-                        println("EVENT_ERROR: ${e.message}")
-                    }
+                    } catch (e: Exception) { println("EVENT_ERROR: ${e.message}") }
                 }
             }
         }
@@ -134,84 +134,211 @@ fun TimerScreen() {
 
     val barColor by animateColorAsState(
         targetValue = when {
-            progress > 0.50f -> AccentCyan
-            progress > 0.25f -> AccentAmber
-            else             -> AccentRed
+            progress > 0.50f -> BlueAccent
+            progress > 0.25f -> AmberAccent
+            else             -> RedAccent
         },
         animationSpec = tween(600),
         label = "barColor"
     )
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDark)
-            .padding(horizontal = 32.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+            .background(PageBg),
+        contentPadding = PaddingValues(bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        HeaderSection(totalPoints = totalPoints)
+        // ── Header ───────────────────────────────────────────
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CardBg)
+                    .padding(top = 52.dp, start = 20.dp, end = 20.dp, bottom = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "VOLTLOOP",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 5.sp,
+                            color = TextSecond
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Ride Timer",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TextPrimary
+                        )
+                    }
 
-        ClockDisplay(secondsLeft = secondsLeft, state = state, accentColor = barColor)
-
-        TimerProgressBar(progress = progress, color = barColor)
-
-        if (state == TimerState.IDLE) {
-            DurationAdjuster(
-                totalSeconds = totalSeconds,
-                onValueChange = { newVal ->
-                    totalSeconds = newVal
-                    secondsLeft  = newVal
+                    // Points pill
+                    Surface(
+                        shape = RoundedCornerShape(50.dp),
+                        color = AmberSoft
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Bolt,
+                                contentDescription = null,
+                                tint = AmberAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "$totalPoints pts",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AmberAccent
+                            )
+                        }
+                    }
                 }
-            )
+            }
         }
 
-        ControlButtons(
-            state   = state,
-            onStart = { if (state == TimerState.IDLE || state == TimerState.PAUSED) state = TimerState.RUNNING },
-            onPause = { state = TimerState.PAUSED },
-            onReset = {
-                state          = TimerState.IDLE
-                secondsLeft    = totalSeconds
-                runningSeconds = 0
-                events.clear()
+        // ── Clock ────────────────────────────────────────────
+        item {
+            Spacer(Modifier.height(28.dp))
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                ClockDisplay(secondsLeft = secondsLeft, state = state, accentColor = barColor)
             }
-        )
+            Spacer(Modifier.height(28.dp))
+        }
 
-        if (state == TimerState.DONE) {
-            val provedCount = events.count { it.proved }
-            DoneBanner(
-                provedCount = provedCount,
-                totalCount  = events.size,
-                onDismiss   = {
-                    // 1. Calculate new points
-                    val earned    = (provedCount * 10) + 5
-                    val newPoints = AppState.totalPoints.value + earned
+        // ── Progress bar ─────────────────────────────────────
+        item {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = CardBg,
+                shadowElevation = 3.dp
+            ) {
+                TimerProgressBar(progress = progress, color = barColor)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
 
-                    // 2. Update globally so ALL screens see the new value immediately
-                    AppState.totalPoints.value = newPoints
+        // ── Duration adjuster (IDLE only) ─────────────────────
+        if (state == TimerState.IDLE) {
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = CardBg,
+                    shadowElevation = 3.dp
+                ) {
+                    DurationAdjuster(
+                        totalSeconds = totalSeconds,
+                        onValueChange = { newVal ->
+                            totalSeconds = newVal
+                            secondsLeft  = newVal
+                        }
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
 
-                    // 3. Persist to Supabase in background
-                    scope.launch { pushPointsToDb(newPoints) }
-
-                    // 4. Reset timer state
+        // ── Control buttons ───────────────────────────────────
+        item {
+            ControlButtons(
+                state   = state,
+                onStart = { if (state == TimerState.IDLE || state == TimerState.PAUSED) state = TimerState.RUNNING },
+                onPause = { state = TimerState.PAUSED },
+                onReset = {
                     state          = TimerState.IDLE
                     secondsLeft    = totalSeconds
                     runningSeconds = 0
                     events.clear()
                 }
             )
+            Spacer(Modifier.height(16.dp))
         }
 
+        // ── Done banner ───────────────────────────────────────
+        if (state == TimerState.DONE) {
+            item {
+                val provedCount = events.count { it.proved }
+                DoneBanner(
+                    provedCount = provedCount,
+                    totalCount  = events.size,
+                    onDismiss   = {
+                        val earned    = (provedCount * 10) + 5
+                        val newPoints = AppState.totalPoints.value + earned
+                        AppState.totalPoints.value = newPoints
+                        scope.launch { pushPointsToDb(newPoints) }
+                        state          = TimerState.IDLE
+                        secondsLeft    = totalSeconds
+                        runningSeconds = 0
+                        events.clear()
+                    }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+
+        // ── Eco challenges ────────────────────────────────────
         if (events.isNotEmpty()) {
-            EventList(
-                events    = events,
-                onProve   = { event -> if (state != TimerState.DONE) provingEvent = event },
-                isLocked  = state == TimerState.DONE
-            )
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "ECO CHALLENGES",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        color = TextSecond
+                    )
+                    if (state == TimerState.DONE) {
+                        Surface(shape = RoundedCornerShape(50.dp), color = Color(0xFFFFEBEE)) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.Lock, contentDescription = null,
+                                    tint = RedAccent, modifier = Modifier.size(12.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Locked", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RedAccent)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+
+            items(events, key = { it.id }) { event ->
+                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 5.dp)) {
+                    EventCard(
+                        event    = event,
+                        onProve  = { if (state != TimerState.DONE) provingEvent = event },
+                        isLocked = state == TimerState.DONE
+                    )
+                }
+            }
         }
     }
 
+    // ── Prove it overlay ──────────────────────────────────────
     provingEvent?.let { event ->
         ProveItScreen(
             challengeText = event.text,
@@ -226,164 +353,7 @@ fun TimerScreen() {
     }
 }
 
-// ─── Event list ───────────────────────────────────────────────────────────────
-@Composable
-private fun EventList(
-    events: List<EcoEvent>,
-    onProve: (EcoEvent) -> Unit,
-    isLocked: Boolean
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "ECO CHALLENGES",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 3.sp,
-                color = TextMuted
-            )
-            if (isLocked) {
-                Text(
-                    text = "🔒 LOCKED",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    color = AccentRed.copy(alpha = 0.7f)
-                )
-            }
-        }
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 320.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(events, key = { it.id }) { event ->
-                EventCard(
-                    event    = event,
-                    onProve  = { onProve(event) },
-                    isLocked = isLocked
-                )
-            }
-        }
-    }
-}
-
-// ─── Single event card ────────────────────────────────────────────────────────
-@Composable
-private fun EventCard(event: EcoEvent, onProve: () -> Unit, isLocked: Boolean) {
-    val borderColor = when {
-        event.proved -> AccentGreen
-        isLocked     -> AccentRed.copy(alpha = 0.2f)
-        else         -> AccentCyan.copy(alpha = 0.3f)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceDark)
-            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(
-                    when {
-                        event.proved -> AccentGreen
-                        isLocked     -> AccentRed.copy(alpha = 0.4f)
-                        else         -> AccentCyan
-                    }
-                )
-        )
-
-        Text(
-            text = event.text,
-            color = if (event.proved || isLocked) TextMuted else TextPrimary,
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
-            modifier = Modifier.weight(1f)
-        )
-
-        Button(
-            onClick = onProve,
-            enabled = !event.proved && !isLocked,
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor         = AccentGreen,
-                contentColor           = BgDark,
-                disabledContainerColor = if (isLocked) AccentRed.copy(alpha = 0.15f) else AccentGreen.copy(alpha = 0.3f),
-                disabledContentColor   = TextMuted
-            ),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = when {
-                    event.proved -> "✓ Done"
-                    isLocked     -> "🔒"
-                    else         -> "Prove it"
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp
-            )
-        }
-    }
-}
-
-// ─── Header ───────────────────────────────────────────────────────────────────
-@Composable
-private fun HeaderSection(totalPoints: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "VOLTLOOP",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 6.sp,
-                color = TextMuted
-            )
-            Spacer(Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(2.dp)
-                    .background(
-                        Brush.horizontalGradient(listOf(AccentCyan, AccentGreen)),
-                        RoundedCornerShape(1.dp)
-                    )
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50.dp))
-                .background(AccentAmber.copy(alpha = 0.15f))
-                .border(1.dp, AccentAmber.copy(alpha = 0.5f), RoundedCornerShape(50.dp))
-                .padding(horizontal = 14.dp, vertical = 6.dp)
-        ) {
-            Text(
-                text = "⚡ $totalPoints pts",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = AccentAmber
-            )
-        }
-    }
-}
-
-// ─── Clock display ────────────────────────────────────────────────────────────
+// ── Clock display ─────────────────────────────────────────────
 @Composable
 private fun ClockDisplay(secondsLeft: Int, state: TimerState, accentColor: Color) {
     val minutes = secondsLeft / 60
@@ -393,7 +363,7 @@ private fun ClockDisplay(secondsLeft: Int, state: TimerState, accentColor: Color
     val scale by animateFloatAsState(
         targetValue = if (state == TimerState.RUNNING) 1.02f else 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
+            animation  = tween(800, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
@@ -401,51 +371,79 @@ private fun ClockDisplay(secondsLeft: Int, state: TimerState, accentColor: Color
 
     Box(
         modifier = Modifier
-            .size(200.dp)
-            .shadow(24.dp, CircleShape, ambientColor = accentColor.copy(alpha = 0.3f))
+            .size(210.dp)
+            .shadow(
+                16.dp, CircleShape,
+                ambientColor = accentColor.copy(alpha = 0.25f),
+                spotColor    = accentColor.copy(alpha = 0.25f)
+            )
             .clip(CircleShape)
-            .background(SurfaceDark)
-            .border(
-                width = 2.dp,
-                brush = Brush.sweepGradient(listOf(accentColor, accentColor.copy(alpha = 0.1f), accentColor)),
-                shape = CircleShape
-            ),
+            .background(CardBg)
+            .border(3.dp, accentColor.copy(alpha = 0.35f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = timeStr,
-            fontSize = (50 * scale).sp,
-            fontWeight = FontWeight.Bold,
-            color = TextPrimary,
-            textAlign = TextAlign.Center,
-            letterSpacing = 2.sp
-        )
+        // Inner soft ring
+        Box(
+            modifier = Modifier
+                .size(180.dp)
+                .clip(CircleShape)
+                .background(BlueSoft.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text       = timeStr,
+                    fontSize   = (48 * scale).sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color      = TextPrimary,
+                    textAlign  = TextAlign.Center,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = when (state) {
+                        TimerState.IDLE    -> "ready"
+                        TimerState.RUNNING -> "running"
+                        TimerState.PAUSED  -> "paused"
+                        TimerState.DONE    -> "done!"
+                    },
+                    fontSize   = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = accentColor,
+                    letterSpacing = 2.sp
+                )
+            }
+        }
     }
 }
 
-// ─── Progress bar ─────────────────────────────────────────────────────────────
+// ── Progress bar ──────────────────────────────────────────────
 @Composable
 private fun TimerProgressBar(progress: Float, color: Color) {
     val animatedProgress by animateFloatAsState(
-        targetValue = progress,
+        targetValue   = progress,
         animationSpec = tween(durationMillis = 900, easing = LinearEasing),
-        label = "progress"
+        label         = "progress"
     )
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "REMAINING",
-            fontSize = 10.sp,
-            letterSpacing = 3.sp,
-            color = TextMuted,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+    Column(modifier = Modifier.padding(20.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("REMAINING", fontSize = 11.sp, letterSpacing = 2.sp,
+                fontWeight = FontWeight.Bold, color = TextSecond)
+            Text(
+                "${(animatedProgress * 100).toInt()}%",
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color
+            )
+        }
+        Spacer(Modifier.height(10.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(10.dp)
                 .clip(RoundedCornerShape(5.dp))
-                .background(SurfaceDark)
+                .background(BlueSoft)
         ) {
             Box(
                 modifier = Modifier
@@ -455,40 +453,17 @@ private fun TimerProgressBar(progress: Float, color: Color) {
                     .background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.6f), color)))
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("0%",   fontSize = 10.sp, color = TextMuted)
-            Text("100%", fontSize = 10.sp, color = TextMuted)
-        }
     }
 }
 
-// ─── Duration adjuster ────────────────────────────────────────────────────────
+// ── Duration adjuster ─────────────────────────────────────────
 @Composable
 private fun DurationAdjuster(totalSeconds: Int, onValueChange: (Int) -> Unit) {
     val presets = listOf(30, 60, 120, 300, 600)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceDark)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text("SET DURATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp, color = TextMuted)
-
-        Slider(
-            value = totalSeconds.toFloat(),
-            onValueChange = { onValueChange(it.toInt()) },
-            valueRange = 5f..600f,
-            modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor         = AccentCyan,
-                activeTrackColor   = AccentCyan,
-                inactiveTrackColor = AccentCyan.copy(alpha = 0.2f)
-            )
-        )
+    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("SET DURATION", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp, color = TextSecond)
 
         val label = when {
             totalSeconds < 60      -> "${totalSeconds}s"
@@ -496,58 +471,100 @@ private fun DurationAdjuster(totalSeconds: Int, onValueChange: (Int) -> Unit) {
             else                   -> "${totalSeconds / 60}m ${totalSeconds % 60}s"
         }
         Text(
-            text = label, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AccentCyan,
-            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+            text      = label,
+            fontSize  = 28.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color     = BlueAccent,
+            modifier  = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
         )
 
-        Text("QUICK PICK", fontSize = 10.sp, letterSpacing = 3.sp, color = TextMuted)
+        Slider(
+            value         = totalSeconds.toFloat(),
+            onValueChange = { onValueChange(it.toInt()) },
+            valueRange    = 5f..600f,
+            modifier      = Modifier.fillMaxWidth(),
+            colors        = SliderDefaults.colors(
+                thumbColor         = BlueAccent,
+                activeTrackColor   = BlueAccent,
+                inactiveTrackColor = BlueSoft
+            )
+        )
+
+        Text("QUICK PICK", fontSize = 11.sp, letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold, color = TextSecond)
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             presets.forEach { preset ->
                 val isSelected  = preset == totalSeconds
                 val presetLabel = if (preset < 60) "${preset}s" else "${preset / 60}m"
-                OutlinedButton(
-                    onClick = { onValueChange(preset) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (isSelected) AccentCyan.copy(alpha = 0.15f) else Color.Transparent,
-                        contentColor   = if (isSelected) AccentCyan else TextMuted
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp, if (isSelected) AccentCyan else TextMuted.copy(alpha = 0.3f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                Surface(
+                    onClick     = { onValueChange(preset) },
+                    modifier    = Modifier.weight(1f),
+                    shape       = RoundedCornerShape(10.dp),
+                    color       = if (isSelected) BlueSoft else PageBg,
+                    border      = androidx.compose.foundation.BorderStroke(
+                        1.5.dp, if (isSelected) BlueAccent else Color.Transparent
+                    )
                 ) {
-                    Text(presetLabel, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        text      = presetLabel,
+                        fontSize  = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color     = if (isSelected) BlueAccent else TextSecond,
+                        modifier  = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
     }
 }
 
-// ─── Control buttons ──────────────────────────────────────────────────────────
+// ── Control buttons ───────────────────────────────────────────
 @Composable
 private fun ControlButtons(
-    state: TimerState, onStart: () -> Unit, onPause: () -> Unit, onReset: () -> Unit
+    state: TimerState,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onReset: () -> Unit
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         OutlinedButton(
-            onClick = onReset,
-            modifier = Modifier.weight(1f).height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted),
-            border = androidx.compose.foundation.BorderStroke(1.dp, TextMuted.copy(alpha = 0.3f))
-        ) { Text("Reset", fontWeight = FontWeight.SemiBold) }
+            onClick  = onReset,
+            modifier = Modifier.weight(1f).height(54.dp),
+            shape    = RoundedCornerShape(16.dp),
+            colors   = ButtonDefaults.outlinedButtonColors(contentColor = TextSecond),
+            border   = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFDDE3EA))
+        ) {
+            Icon(Icons.Filled.Refresh, contentDescription = null,
+                modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Reset", fontWeight = FontWeight.SemiBold)
+        }
 
         Button(
-            onClick = if (state == TimerState.RUNNING) onPause else onStart,
-            modifier = Modifier.weight(2f).height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (state == TimerState.RUNNING) AccentAmber else AccentCyan,
-                contentColor   = BgDark
+            onClick  = if (state == TimerState.RUNNING) onPause else onStart,
+            modifier = Modifier.weight(2f).height(54.dp),
+            shape    = RoundedCornerShape(16.dp),
+            colors   = ButtonDefaults.buttonColors(
+                containerColor = if (state == TimerState.RUNNING) AmberAccent else BlueAccent,
+                contentColor   = Color.White
             )
         ) {
+            Icon(
+                imageVector = if (state == TimerState.RUNNING) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = when (state) {
                     TimerState.RUNNING -> "Pause"
@@ -555,132 +572,221 @@ private fun ControlButtons(
                     TimerState.DONE    -> "Done"
                     TimerState.IDLE    -> "Start"
                 },
-                fontWeight = FontWeight.Bold, fontSize = 16.sp
+                fontWeight = FontWeight.Bold,
+                fontSize   = 16.sp
             )
         }
     }
 }
 
-// ─── Done banner ──────────────────────────────────────────────────────────────
+// ── Done banner ───────────────────────────────────────────────
 @Composable
 private fun DoneBanner(provedCount: Int, totalCount: Int, onDismiss: () -> Unit) {
-    val scope = rememberCoroutineScope()
+    val scope   = rememberCoroutineScope()
     var locking by remember { mutableStateOf(false) }
-
-    val alpha by rememberInfiniteTransition(label = "blink").animateFloat(
-        initialValue = 0.6f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
-        label = "alpha"
-    )
 
     val pointsEarned = (provedCount * 10) + 5
 
-    Box(
-        modifier = Modifier
+    Surface(
+        modifier        = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(SurfaceDark)
-            .border(1.dp, AccentGreen.copy(alpha = alpha), RoundedCornerShape(20.dp))
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 20.dp),
+        shape           = RoundedCornerShape(24.dp),
+        color           = CardBg,
+        shadowElevation = 6.dp
     ) {
         Column(
+            modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("🔋", fontSize = 48.sp)
+            // Icon
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .shadow(10.dp, CircleShape,
+                        ambientColor = GreenAccent.copy(alpha = 0.3f),
+                        spotColor    = GreenAccent.copy(alpha = 0.3f))
+                    .clip(CircleShape)
+                    .background(GreenSoft),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector        = Icons.Filled.BatteryChargingFull,
+                    contentDescription = null,
+                    tint               = GreenAccent,
+                    modifier           = Modifier.size(32.dp)
+                )
+            }
 
             Text(
-                text = "Return your battery!",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = AccentGreen,
-                textAlign = TextAlign.Center
+                text       = "Return your battery!",
+                fontSize   = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color      = TextPrimary,
+                textAlign  = TextAlign.Center
             )
-
             Text(
-                text = "Head to the nearest drop-off point\nand place your battery in the bin.",
-                fontSize = 14.sp,
-                color = TextMuted,
+                text      = "Head to the nearest drop-off point\nand place your battery in the bin.",
+                fontSize  = 14.sp,
+                color     = TextSecond,
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp
             )
 
+            // Stats row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(BgDark)
-                        .padding(12.dp),
-                    contentAlignment = Alignment.Center
+                // Challenges stat
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape    = RoundedCornerShape(16.dp),
+                    color    = if (provedCount == totalCount) GreenSoft else AmberSoft
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text(
-                            text = "$provedCount/$totalCount",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (provedCount == totalCount) AccentGreen else AccentAmber
+                            text       = "$provedCount/$totalCount",
+                            fontSize   = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color      = if (provedCount == totalCount) GreenAccent else AmberAccent
                         )
-                        Text("challenges", fontSize = 11.sp, color = TextMuted)
+                        Text("challenges", fontSize = 12.sp, color = TextSecond)
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(BgDark)
-                        .padding(12.dp),
-                    contentAlignment = Alignment.Center
+                // Points stat
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape    = RoundedCornerShape(16.dp),
+                    color    = AmberSoft
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "+$pointsEarned",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AccentAmber
-                        )
-                        Text("⚡ points", fontSize = 11.sp, color = TextMuted)
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Bolt, contentDescription = null,
+                                tint = AmberAccent, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text       = "+$pointsEarned",
+                                fontSize   = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color      = AmberAccent
+                            )
+                        }
+                        Text("points", fontSize = 12.sp, color = TextSecond)
                     }
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
-
+            // CTA button
             Button(
-                onClick = {
+                onClick  = {
                     scope.launch {
                         locking = true
-                        try {
-                            lockLocker()
-                        } catch (e: Exception) {
-                            println("LOCK_ERROR: ${e.message}")
-                        } finally {
-                            locking = false
-                            onDismiss()
-                        }
+                        try { lockLocker() }
+                        catch (e: Exception) { println("LOCK_ERROR: ${e.message}") }
+                        finally { locking = false; onDismiss() }
                     }
                 },
-                enabled = !locking,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentGreen,
-                    contentColor   = BgDark
+                enabled  = !locking,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape    = RoundedCornerShape(16.dp),
+                colors   = ButtonDefaults.buttonColors(
+                    containerColor = GreenAccent,
+                    contentColor   = Color.White
                 )
             ) {
                 if (locking) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = BgDark,
+                        modifier    = Modifier.size(20.dp),
+                        color       = Color.White,
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("✓  I placed it!", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null,
+                        modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("I placed it!", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+        }
+    }
+}
+
+// ── Event card ────────────────────────────────────────────────
+@Composable
+private fun EventCard(event: EcoEvent, onProve: () -> Unit, isLocked: Boolean) {
+    Surface(
+        modifier        = Modifier.fillMaxWidth(),
+        shape           = RoundedCornerShape(16.dp),
+        color           = CardBg,
+        shadowElevation = 3.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Status dot
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            event.proved -> GreenAccent
+                            isLocked     -> RedAccent.copy(alpha = 0.4f)
+                            else         -> BlueAccent
+                        }
+                    )
+            )
+
+            Text(
+                text       = event.text,
+                color      = if (event.proved || isLocked) TextSecond else TextPrimary,
+                fontSize   = 13.sp,
+                lineHeight = 18.sp,
+                modifier   = Modifier.weight(1f)
+            )
+
+            if (event.proved) {
+                Surface(shape = RoundedCornerShape(50.dp), color = GreenSoft) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null,
+                            tint = GreenAccent, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Done", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GreenAccent)
+                    }
+                }
+            } else {
+                Button(
+                    onClick  = onProve,
+                    enabled  = !isLocked,
+                    shape    = RoundedCornerShape(10.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor         = BlueAccent,
+                        contentColor           = Color.White,
+                        disabledContainerColor = RedAccent.copy(alpha = 0.1f),
+                        disabledContentColor   = TextSecond
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    if (isLocked) {
+                        Icon(Icons.Filled.Lock, contentDescription = null,
+                            modifier = Modifier.size(14.dp))
+                    } else {
+                        Text("Prove it", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
                 }
             }
         }

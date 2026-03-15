@@ -93,7 +93,7 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
             AppState.friends.value = currentFriends
             
             val rows = supabase.postgrest["History"]
-                .select { filter { eq("Name", email) } }  // use email directly, not profile.username
+                .select { filter { eq("Name", email) } }
                 .decodeList<TripHistory>()
 
             println("TEST HISTORY size=${rows.size}")
@@ -109,8 +109,24 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
         }
     }
 
-    val friends    = AppState.friends.value
-    val listFriends = if (friends.size >= 3) friends.drop(3) else friends
+    val friends = AppState.friends.value
+
+    // Build a combined leaderboard: friends + current user, sorted by points descending
+    val currentUserProfile = AppState.currentUser.value?.let { user ->
+        friends.find { it.id == user.id }
+            ?: Profile(
+                id = user.id,
+                email = user.email,
+                username = user.email?.substringBefore("@"),
+                points = AppState.totalPoints.value.toLong()
+
+            )
+    }
+    val leaderboard = (friends + listOfNotNull(currentUserProfile))
+        .distinctBy { it.id }
+        .sortedByDescending { it.points }
+
+    val listFriends = if (leaderboard.size >= 3) leaderboard.drop(3) else leaderboard
 
     Column(
         modifier = Modifier
