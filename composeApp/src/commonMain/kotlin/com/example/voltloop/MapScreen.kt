@@ -15,18 +15,17 @@ import androidx.compose.ui.Modifier
 
 @Composable
 fun MapScreen_real() {
-    var selected by remember { mutableStateOf(NavItem.StartTrip) }
+    var selected by remember { mutableStateOf(NavItem.Map) }
 
     Scaffold(
 
     ) { innerPadding ->
         Box(
-            contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            Text("This is the start map screen!!!")
+            MapView(modifier = Modifier.fillMaxSize())
         }
     }
 }

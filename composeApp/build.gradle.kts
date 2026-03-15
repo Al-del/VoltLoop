@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    kotlin("plugin.serialization")
+    kotlin("plugin.serialization") // Fix: use version catalog alias instead of kotlin()
 }
 
 val ktorVersion = "3.0.3"
@@ -44,7 +44,27 @@ kotlin {
             implementation("androidx.camera:camera-view:1.3.4")
             implementation("com.google.mlkit:barcode-scanning:17.3.0")
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-            implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
+androidMain.dependencies {
+    implementation(libs.compose.uiToolingPreview)
+    implementation(libs.androidx.activity.compose)
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
+    implementation("io.ktor:ktor-client-okhttp:${ktorVersion}")
+
+    // Google Maps
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.maps.android:maps-compose:6.1.2")
+    implementation("com.google.maps.android:maps-compose-utils:6.1.2")
+
+    // Coil for SVG support
+    implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
+}
+
         }
 
         commonMain.dependencies {
@@ -61,7 +81,7 @@ kotlin {
             implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
             implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
             implementation("io.ktor:ktor-client-logging:$ktorVersion")
-         //   implementation(project.dependencies.platform(libs.supabase.bom))
+
             // Supabase
             implementation("io.github.jan-tennert.supabase:auth-kt:3.0.3")
             implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.3")
@@ -110,6 +130,7 @@ kotlin {
                 object Secrets {
                     const val SUPABASE_URL = "$supabaseUrl"
                     const val SUPABASE_ANON_KEY = "$supabaseAnonKey"
+                    const val GOOGLE_MAPS_API_KEY = "AIzaSyAMNxRu8E4kluchvUXLY975AzFlFIZfvU0"
                 }
             """.trimIndent())
         }
@@ -131,6 +152,7 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    sourceSets["main"].res.filter.exclude("**/one_battery.svg")
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
