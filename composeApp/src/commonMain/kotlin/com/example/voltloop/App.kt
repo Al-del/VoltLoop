@@ -12,6 +12,13 @@ import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.datetime.Clock
+import kotlinx.serialization.json.Json
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
@@ -73,7 +80,13 @@ fun App() {
                             val friendProfiles = supabase.postgrest["profiles"]
                                 .select { filter { isIn("id", friendIds) } }
                                 .decodeList<Profile>()
-                            AppState.friends.value = friendProfiles.sortedByDescending { it.points }
+                            
+                            // Include the current user's profile in the global list so UI markers/avatars work
+                            val allProfiles = (friendProfiles + profile).distinctBy { it.id }
+                            AppState.friends.value = allProfiles.sortedByDescending { it.points }
+                        } else {
+                            // Even if no friends, include the current user's profile
+                            AppState.friends.value = listOf(profile)
                         }
 
                         println("FRIENDS_LIST: ${AppState.friends.value.map { "${it.username} - ${it.points} pts" }}")
@@ -84,6 +97,87 @@ fun App() {
                         // ← FIXED: always set to false so loading screen goes away
                         isCheckingProfile = false
                     }
+                }
+
+                // ── Real-time Global Listeners ──────────────────────────
+                LaunchedEffect(user?.id) {
+                    val currentUserId = user?.id ?: return@LaunchedEffect
+                    val json = Json { ignoreUnknownKeys = true }
+
+                    // 1. Listen for new messages
+                    val msgChannel = supabase.channel("global_messages")
+                    msgChannel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "messages" }
+                        .onEach { action ->
+                            if (action is PostgresAction.Insert) {
+                                try {
+                                    val msg = json.decodeFromJsonElement(Message.serializer(), action.record)
+                                    if (msg.receiverId != currentUserId) return@onEach
+
+                                    // Try to resolve sender name
+                                    val senderName = try {
+                                        val profileResource = supabase.postgrest["profiles"]
+                                            .select { filter { eq("id", msg.senderId) } }
+                                            .decodeSingle<Profile>()
+                                        profileResource.username ?: profileResource.email?.substringBefore("@") ?: "Someone"
+                                    } catch (e: Exception) { "Someone" }
+
+                                    val notif = AppNotification(
+                                        id = msg.id ?: msg.createdAt ?: "${Clock.System.now().toEpochMilliseconds()}",
+                                        type = NotificationType.MESSAGE,
+                                        title = "New message from $senderName",
+                                        body = if (msg.content.length > 60) msg.content.take(60) + "…" else msg.content,
+                                        timestamp = msg.createdAt?.replace("T", " ")?.substringBefore(".")
+                                    )
+                                    showLocalNotification(notif.title, notif.body)
+                                    AppState.globalNotifications.value = listOf(notif) + AppState.globalNotifications.value
+                                } catch (e: Exception) {
+                                    println("GLOBAL_MSG_ERROR: ${e.message}")
+                                }
+                            }
+                        }.launchIn(this)
+                    msgChannel.subscribe()
+
+                    // 2. Listen for profile points updates
+                    val profileChannel = supabase.channel("global_profile")
+                    var lastKnownPoints: Long? = null
+                    
+                    // Seed the last known points
+                    try {
+                        val initialProfile = supabase.postgrest["profiles"]
+                            .select { filter { eq("id", currentUserId) } }
+                            .decodeSingle<Profile>()
+                        lastKnownPoints = initialProfile.points
+                        AppState.totalPoints.value = initialProfile.points.toInt()
+                    } catch (_: Exception) {}
+
+                    profileChannel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "profiles" }
+                        .onEach { action ->
+                            if (action is PostgresAction.Update) {
+                                try {
+                                    val profileUpdate = json.decodeFromJsonElement(Profile.serializer(), action.record)
+                                    if (profileUpdate.id != currentUserId) return@onEach
+                                    
+                                    val prev = lastKnownPoints
+                                    if (prev != null && profileUpdate.points > prev) {
+                                        val gained = profileUpdate.points - prev
+                                        val notif = AppNotification(
+                                            id = "${Clock.System.now().toEpochMilliseconds()}",
+                                            type = NotificationType.POINTS,
+                                            title = "You earned $gained points!",
+                                            body = "Your total is now ${profileUpdate.points} pts",
+                                            timestamp = null
+                                        )
+                                        showLocalNotification(notif.title, notif.body)
+                                        AppState.globalNotifications.value = listOf(notif) + AppState.globalNotifications.value
+                                    }
+                                    lastKnownPoints = profileUpdate.points
+                                    AppState.totalPoints.value = profileUpdate.points.toInt()
+                                } catch (e: Exception) {
+                                    println("GLOBAL_PROFILE_UPDATE_ERROR: ${e.message}")
+                                }
+                            }
+                        }.launchIn(this)
+                    profileChannel.subscribe()
                 }
 
                 when {

@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
-import io.github.jan.supabase.auth.providers.Google
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -181,15 +180,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            onClick = {
-                scope.launch {
-                    try {
-                        supabase.auth.signInWith(Google)
-                    } catch (e: Exception) {
-                        errorMessage = e.message ?: "Google Sign-In failed"
-                    }
-                }
-            },
+            onClick = { /* Implement Google Sign in handler if needed */ },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = buttonDark),
