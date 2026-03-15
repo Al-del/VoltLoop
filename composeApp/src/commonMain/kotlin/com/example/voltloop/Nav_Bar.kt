@@ -1227,6 +1227,8 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
     val currentUserId = remember { supabase.auth.currentUserOrNull()?.id ?: "" }
     val listState = rememberLazyListState()
 
+    val voltBlue = Color(0xFF43BBF7)
+
     LaunchedEffect(friendId) {
         try {
             val fetchedMessages = supabase.postgrest["messages"]
@@ -1276,37 +1278,90 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(friendName) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Friend avatar circle with initial
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color.White.copy(alpha = 0.25f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = friendName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                friendName,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                "VoltLoop Chat",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1C8EC8),
+                    containerColor = voltBlue,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
             )
         },
         bottomBar = {
-            Surface(tonalElevation = 2.dp) {
+            // Styled input bar matching the app's borderless text field aesthetic
+            Surface(
+                shadowElevation = 12.dp,
+                color = Color.White
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp).navigationBarsPadding(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .navigationBarsPadding(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextField(
-                        value = newMessage,
-                        onValueChange = { newMessage = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Type a message...") },
-                        shape = RoundedCornerShape(24.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .background(Color(0xFFF5F5F5), RoundedCornerShape(24.dp)),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = newMessage,
+                            onValueChange = { newMessage = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 15.sp,
+                                color = Color(0xFF1A1A1A)
+                            ),
+                            singleLine = true,
+                            decorationBox = { inner ->
+                                if (newMessage.isEmpty()) {
+                                    Text("Message...", color = Color.Gray.copy(alpha = 0.7f), fontSize = 15.sp)
+                                }
+                                inner()
+                            }
                         )
-                    )
-                    Spacer(Modifier.width(8.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
                     FloatingActionButton(
                         onClick = {
                             if (newMessage.isNotBlank()) {
@@ -1325,12 +1380,13 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
                                 }
                             }
                         },
-                        containerColor = Color(0xFF43BBF7),
+                        containerColor = voltBlue,
                         contentColor = Color.White,
                         shape = CircleShape,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(48.dp),
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -1338,32 +1394,36 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
     ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF5F5F5)),
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(Color(0xFFF9F9F9)),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(messages) { message ->
                 val isMe = message.senderId == currentUserId
-                Box(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+                    horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
                 ) {
                     Surface(
-                        color = if (isMe) Color(0xFF43BBF7) else Color.White,
+                        color = if (isMe) voltBlue else Color.White,
                         shape = RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isMe) 16.dp else 0.dp,
-                            bottomEnd = if (isMe) 0.dp else 16.dp
+                            topStart = 20.dp,
+                            topEnd = 20.dp,
+                            bottomStart = if (isMe) 20.dp else 4.dp,
+                            bottomEnd = if (isMe) 4.dp else 20.dp
                         ),
-                        tonalElevation = 1.dp,
-                        shadowElevation = 1.dp
+                        shadowElevation = if (isMe) 0.dp else 2.dp,
+                        modifier = Modifier.widthIn(min = 80.dp, max = 280.dp)
                     ) {
                         Text(
                             text = message.content,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            color = if (isMe) Color.White else Color.Black,
-                            fontSize = 15.sp
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            color = if (isMe) Color.White else Color(0xFF1A1A1A),
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp
                         )
                     }
                 }
