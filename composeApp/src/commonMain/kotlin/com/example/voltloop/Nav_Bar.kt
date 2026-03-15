@@ -25,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -649,7 +650,9 @@ fun Nav_Bar_ussage() {
             } // Search Bar Component Column
         } else {
             if (!isChatScreen) {
-                mapLayer(batteries, friendsLocations, currentPanLocation)
+                Box(modifier = Modifier.fillMaxSize().blur(16.dp)) {
+                    mapLayer(batteries, friendsLocations, currentPanLocation)
+                }
             }
         }
 
@@ -760,6 +763,7 @@ fun FriendsScreen(navController: NavController) {
     var friendRequests by remember { mutableStateOf<List<Pair<Friendship, Profile>>>(emptyList()) }
     var sentRequests by remember { mutableStateOf<List<Pair<Friendship, Profile>>>(emptyList()) }
     var currentFriends by remember { mutableStateOf<List<Pair<Friendship, Profile>>>(emptyList()) }
+    var suggestedFriends by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
 
     fun refreshFriendsData() {
@@ -796,6 +800,41 @@ fun FriendsScreen(navController: NavController) {
                     val profile = profiles.find { it.id == friendship.friendId }
                     if (profile != null) friendship to profile else null
                 }
+                
+                val acceptedFriendIds = currentFriends.map { it.second.id }
+                val connectedIds = allIds + currentUserId
+                
+                if (acceptedFriendIds.isNotEmpty()) {
+                    val friendsOfFriends = supabase.postgrest["friendships"]
+                        .select {
+                            filter {
+                                or {
+                                    acceptedFriendIds.forEach { id -> eq("user_id", id) }
+                                    acceptedFriendIds.forEach { id -> eq("friend_id", id) }
+                                }
+                                eq("status", "accepted")
+                            }
+                        }.decodeList<Friendship>()
+                        
+                    val suggestedIdsRaw = friendsOfFriends.map { fof ->
+                        if (acceptedFriendIds.contains(fof.userId)) fof.friendId else fof.userId
+                    }.filter { !connectedIds.contains(it) }
+
+                    val suggestionsCount = suggestedIdsRaw.groupingBy { it }.eachCount()
+                    val topSuggestedIds = suggestionsCount.entries.sortedByDescending { it.value }.take(5).map { it.key }
+
+                    if (topSuggestedIds.isNotEmpty()) {
+                        val suggestedProfiles = supabase.postgrest["profiles"]
+                            .select { filter { or { topSuggestedIds.forEach { id -> eq("id", id) } } } }
+                            .decodeList<Profile>()
+                        suggestedFriends = suggestedProfiles.sortedByDescending { suggestionsCount[it.id] ?: 0 }
+                    } else {
+                        suggestedFriends = emptyList()
+                    }
+                } else {
+                    suggestedFriends = emptyList()
+                }
+
             } catch (e: Exception) {
                 println("Error fetching friends data: ${e.message}")
             }
@@ -807,7 +846,7 @@ fun FriendsScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Color.White.copy(alpha = 0.5f))
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 16.dp)
             .padding(bottom = 100.dp)
@@ -816,7 +855,7 @@ fun FriendsScreen(navController: NavController) {
             "Friends",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = GreenDark,
+            color = Color(0xFF43BBF7),
             modifier = Modifier.padding(vertical = 16.dp)
         )
 
@@ -826,7 +865,7 @@ fun FriendsScreen(navController: NavController) {
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search by email or username") },
             leadingIcon = { Icon(Icons.Default.Search, null) },
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(24.dp),
             singleLine = true,
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
@@ -851,7 +890,7 @@ fun FriendsScreen(navController: NavController) {
                             }
                         }
                     }) {
-                        Icon(Icons.Default.Add, null, tint = GreenBright)
+                        Icon(Icons.Default.Add, null, tint = Color(0xFF43BBF7))
                     }
                 }
             }
@@ -881,6 +920,29 @@ fun FriendsScreen(navController: NavController) {
                                     supabase.postgrest["friendships"].insert(friendship)
                                     searchQuery = ""
                                     searchResult = emptyList()
+                                    refreshFriendsData()
+                                } catch (e: Exception) {
+                                    println("Error sending request: ${e.message}")
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+            if (suggestedFriends.isNotEmpty()) {
+                item { Text("Suggested Friends", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
+                items(suggestedFriends) { profile ->
+                    UserRow(
+                        profile = profile,
+                        actionLabel = "Add",
+                        onAction = {
+                            scope.launch {
+                                try {
+                                    val friendship = Friendship(
+                                        userId = supabase.auth.currentUserOrNull()?.id ?: "",
+                                        friendId = profile.id
+                                    )
+                                    supabase.postgrest["friendships"].insert(friendship)
                                     refreshFriendsData()
                                 } catch (e: Exception) {
                                     println("Error sending request: ${e.message}")
@@ -967,19 +1029,19 @@ fun UserRow(
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(GreenLight),
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFE1F5FE)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(profile.username?.take(1)?.uppercase() ?: "?", fontWeight = FontWeight.Bold, color = GreenDark)
+                Text(profile.username?.take(1)?.uppercase() ?: "?", fontWeight = FontWeight.Bold, color = Color(0xFF43BBF7))
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -991,49 +1053,11 @@ fun UserRow(
                     onClick = onAction,
                     enabled = enabled,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = GreenBright,
+                        containerColor = Color(0xFF43BBF7),
                         disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
                     ),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(actionLabel, fontSize = 12.sp)
-                }
-            }
-            if (showOptions) {
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Remove", color = Color.Red) },
-                            onClick = {
-                                showMenu = false
-                                onRemove?.invoke()
-                            }
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(profile.displayName ?: "User", fontWeight = FontWeight.SemiBold)
-                Text(profile.email ?: "", fontSize = 12.sp, color = Color.Gray)
-            }
-            if (actionLabel != null) {
-                Button(
-                    onClick = onAction,
-                    enabled = enabled,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = GreenBright,
-                        disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(actionLabel, fontSize = 12.sp)
                 }
@@ -1127,7 +1151,7 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = GreenDark,
+                    containerColor = Color(0xFF1C8EC8),
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -1169,7 +1193,7 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
                                 }
                             }
                         },
-                        containerColor = GreenBright,
+                        containerColor = Color(0xFF43BBF7),
                         contentColor = Color.White,
                         shape = CircleShape,
                         modifier = Modifier.size(48.dp)
@@ -1193,7 +1217,7 @@ fun ChatScreen(friendId: String, friendName: String, navController: NavControlle
                     contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
                     Surface(
-                        color = if (isMe) GreenBright else Color.White,
+                        color = if (isMe) Color(0xFF43BBF7) else Color.White,
                         shape = RoundedCornerShape(
                             topStart = 16.dp,
                             topEnd = 16.dp,
