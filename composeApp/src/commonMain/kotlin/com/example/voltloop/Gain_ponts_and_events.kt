@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import com.example.voltloop.Camera.ProveItScreen
 import com.example.voltloop.NetworkStuff.getEvent
 import com.example.voltloop.NetworkStuff.lockLocker
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -45,6 +47,34 @@ private data class EcoEvent(
     val proved: Boolean = false
 )
 
+// ── Sync points FROM Supabase into AppState (call on login / app start) ───────
+suspend fun syncPointsFromDb() {
+    try {
+        val email = AppState.currentUser.value?.email ?: return
+        val profile = supabase.postgrest["profiles"]
+            .select { filter { eq("email", email) } }
+            .decodeSingle<Profile>()
+        AppState.totalPoints.value = (profile.points ?: 0) as Int
+        println("POINTS_SYNCED: ${AppState.totalPoints.value}")
+    } catch (e: Exception) {
+        println("POINTS_SYNC_ERROR: ${e.message}")
+    }
+}
+
+// ── Push updated points TO Supabase ──────────────────────────────────────────
+private suspend fun pushPointsToDb(newPoints: Int) {
+    try {
+        val email = AppState.currentUser.value?.email ?: return
+        supabase.postgrest["profiles"]
+            .update({ set("points", newPoints) }) {
+                filter { eq("email", email) }
+            }
+        println("POINTS_UPDATED_DB: $newPoints")
+    } catch (e: Exception) {
+        println("POINTS_UPDATE_ERROR: ${e.message}")
+    }
+}
+
 @Composable
 fun TimerScreen() {
 
@@ -53,10 +83,15 @@ fun TimerScreen() {
     var state          by remember { mutableStateOf(TimerState.IDLE) }
     var provingEvent   by remember { mutableStateOf<EcoEvent?>(null) }
     var runningSeconds by remember { mutableStateOf(0) }
-    var totalPoints    by AppState.totalPoints  // ← from AppState now
+    val totalPoints    by AppState.totalPoints   // reads globally, recomposes on change
 
-
+    val scope  = rememberCoroutineScope()
     val events = remember { mutableStateListOf<EcoEvent>() }
+
+    // ── Sync points from DB when screen first loads ───────────────────────────
+    LaunchedEffect(Unit) {
+        syncPointsFromDb()
+    }
 
     // ── Timer tick ────────────────────────────────────────────────────────────
     LaunchedEffect(state) {
@@ -149,7 +184,17 @@ fun TimerScreen() {
                 provedCount = provedCount,
                 totalCount  = events.size,
                 onDismiss   = {
-                    AppState.totalPoints.value += (provedCount * 10) + 5  // ← updates AppState
+                    // 1. Calculate new points
+                    val earned    = (provedCount * 10) + 5
+                    val newPoints = AppState.totalPoints.value + earned
+
+                    // 2. Update globally so ALL screens see the new value immediately
+                    AppState.totalPoints.value = newPoints
+
+                    // 3. Persist to Supabase in background
+                    scope.launch { pushPointsToDb(newPoints) }
+
+                    // 4. Reset timer state
                     state          = TimerState.IDLE
                     secondsLeft    = totalSeconds
                     runningSeconds = 0

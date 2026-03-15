@@ -187,12 +187,7 @@ private fun ResultScreen(result: String, onScanAgain: () -> Unit) {
         Spacer(modifier = Modifier.height(32.dp))
         Button(
             onClick = {
-                /*
-                 TODO: Raspberry pi request
-
-                 */
                 scope.launch {
-                    /* DONE: GET REQUEST HOW TO DO */
                     try {
                         val users = getUsers()
                         users.forEach { user ->

@@ -27,6 +27,7 @@ fun App() {
         when (sessionStatus) {
         is SessionStatus.Authenticated -> {
             val user = (sessionStatus as SessionStatus.Authenticated).session.user
+
             AppState.currentUser.value = user
             
             var needsUsername by remember { mutableStateOf(false) }
@@ -35,25 +36,46 @@ fun App() {
             LaunchedEffect(user?.email) {
                 user?.email?.let { email ->
                     try {
+                        // 1. Fetch the current user's profile
                         val profile = supabase.postgrest["profiles"]
                             .select { filter { eq("email", email) } }
-                            .decodeSingleOrNull<Profile>()
-                            
-                        if (profile != null) {
-                            AppState.totalPoints.value = profile.points.toInt()
-                            // Valid VoltLoop usernames: alphanumeric + underscores only (no spaces, dots, @)
-                            val validUsername = profile.username?.matches(Regex("^[a-zA-Z0-9_]+$")) == true
-                            if (!validUsername) {
-                                needsUsername = true
+                            .decodeSingle<Profile>()
+                        AppState.totalPoints.value = profile.points.toInt()
+
+                        // 2. Fetch all friendships where this user is involved
+                        val userId = user.id
+                        val friendships = supabase.postgrest["friendships"]
+                            .select {
+                                filter {
+                                    or {
+                                        eq("user_id", userId)
+                                        eq("friend_id", userId)
+                                    }
+                                }
                             }
-                        } else {
-                            // First time OAuth login, no profile exists
-                            needsUsername = true
+                            .decodeList<Friendship>()
+
+                        // 3. Extract the friend IDs (the other side of each row)
+                        val friendIds = friendships.map { friendship ->
+                            if (friendship.userId == userId) friendship.friendId
+                            else friendship.userId
                         }
+
+                        // 4. Fetch each friend's profile and sort by points descending
+                        if (friendIds.isNotEmpty()) {
+                            val friendProfiles = supabase.postgrest["profiles"]
+                                .select {
+                                    filter {
+                                        isIn("id", friendIds)
+                                    }
+                                }
+                                .decodeList<Profile>()
+
+                            AppState.friends.value = friendProfiles.sortedByDescending { it.points }
+                        }
+                        println("FRIENDS_LIST: ${AppState.friends.value.map { "${it.username} - ${it.points} pts" }}")
                     } catch (e: Exception) {
-                        println("PROFILE_FETCH_ERROR: ${e.message}")
-                    } finally {
-                        isCheckingProfile = false
+                        println("FETCH_ERROR: ${e.message}")
                     }
                 }
             }
