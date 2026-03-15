@@ -69,6 +69,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object Map : Screen("map")
     object StartTrip : Screen("start_trip")
+    object Account : Screen("account")           // NEW — separate from StartTrip
     object Friends : Screen("friends")
     object Store : Screen("store")
     object QrScanner : Screen("qr_scanner")
@@ -79,7 +80,7 @@ sealed class Screen(val route: String) {
 
 enum class NavItem(val label: String, val icon: ImageVector, val screen: Screen) {
     History("History", Icons.Filled.History, Screen.Settings),
-    Account("Account", Icons.Filled.Person, Screen.StartTrip),
+    Account("Account", Icons.Filled.Person, Screen.Account),  // now points to Screen.Account
     Map("Map", Icons.Filled.Language, Screen.Map),
     Friends("Friends", Icons.Filled.PersonAdd, Screen.Friends),
 }
@@ -103,7 +104,6 @@ fun WhiteNavBar(
             .background(NavBarBg),
         contentAlignment = Alignment.TopCenter
     ) {
-        // The 4 nav icons row
         Row(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
@@ -136,10 +136,9 @@ fun WhiteNavBar(
     }
 }
 
-
 // Haversine formula to return distance in km
 fun haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val earthRadius = 6371.0 // in km
+    val earthRadius = 6371.0
     val dLat = (lat2 - lat1) * PI / 180.0
     val dLon = (lon2 - lon1) * PI / 180.0
     val a = sin(dLat / 2) * sin(dLat / 2) +
@@ -162,7 +161,7 @@ fun MapSearchBar(
         targetValue = if (isFocused) 16.dp else 27.dp,
         animationSpec = tween(durationMillis = 300)
     )
-    
+
     val elevation by animateDpAsState(
         targetValue = if (isFocused) 4.dp else 16.dp,
         animationSpec = tween(durationMillis = 300)
@@ -266,7 +265,6 @@ private fun NavIconButton(
                 tint = iconColor,
                 modifier = Modifier.size(26.dp),
             )
-            // Selected indicator dot
             if (isSelected) {
                 Box(
                     modifier = Modifier
@@ -281,60 +279,30 @@ private fun NavIconButton(
     }
 }
 
+// ─── NEW: simple Account screen ───────────────────────────────────────────────
 @Composable
-fun QrScannerScreen(onDismiss: () -> Unit) {
+fun AccountScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f)),
+            .background(Color.White),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Text(
-                text = "Scan QR Code",
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Box(
-                modifier = Modifier
-                    .size(240.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.QrCodeScanner,
-                    contentDescription = "QR Scanner",
-                    tint = Color.White,
-                    modifier = Modifier.size(160.dp)
-                )
-            }
-            Text(
-                text = "Point your camera at a VoltLoop QR code",
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 14.sp
-            )
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = LightningBlue),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Close", color = Color.White)
-            }
-        }
+        Text(
+            text = "Account",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = GreenDark
+        )
     }
 }
+// ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun Nav_Bar_ussage() {
     val navController = rememberNavController()
     var selected by remember { mutableStateOf(NavItem.Map) }
     var previousSelected by remember { mutableStateOf(NavItem.Map) }
-    var showQrScanner by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     var isAdmin by remember { mutableStateOf(false) }
@@ -356,10 +324,12 @@ fun Nav_Bar_ussage() {
 
     LaunchedEffect(currentRoute) {
         when {
-            currentRoute == Screen.Settings.route -> { previousSelected = selected; selected = NavItem.History }
-            currentRoute == Screen.Friends.route -> { previousSelected = selected; selected = NavItem.Friends }
-            currentRoute == Screen.Map.route -> { previousSelected = selected; selected = NavItem.Map }
-            currentRoute == Screen.StartTrip.route -> { previousSelected = selected; selected = NavItem.Account }
+            currentRoute == Screen.Settings.route  -> { previousSelected = selected; selected = NavItem.History }
+            currentRoute == Screen.Friends.route   -> { previousSelected = selected; selected = NavItem.Friends }
+            currentRoute == Screen.Map.route       -> { previousSelected = selected; selected = NavItem.Map }
+            currentRoute == Screen.Account.route   -> { previousSelected = selected; selected = NavItem.Account }
+            // StartTrip is reached via the lightning button — no nav tab change needed
+            currentRoute == Screen.StartTrip.route -> { previousSelected = selected }
             currentRoute?.startsWith("chat/") == true -> { previousSelected = selected }
             currentRoute == null -> selected = previousSelected
         }
@@ -507,12 +477,13 @@ fun Nav_Bar_ussage() {
                 startDestination = Screen.Map.route,
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable(Screen.Settings.route) { SettingsScreen() }
-                composable(Screen.StartTrip.route) { Start_Trip() }
-                composable(Screen.Friends.route) { FriendsScreen(navController) }
-                composable(Screen.Store.route) { StoreScreen() }
+                composable(Screen.Settings.route)  { SettingsScreen() }
+                composable(Screen.Account.route)   { AccountScreen() }   // NEW
+                composable(Screen.StartTrip.route) { Start_Trip() }      // lightning button only
+                composable(Screen.Friends.route)   { FriendsScreen(navController) }
+                composable(Screen.Store.route)     { StoreScreen() }
                 composable(Screen.Chat.route) { backStackEntry ->
-                    val friendId = backStackEntry.arguments?.getString("friendId") ?: ""
+                    val friendId   = backStackEntry.arguments?.getString("friendId")   ?: ""
                     val friendName = backStackEntry.arguments?.getString("friendName") ?: "Chat"
                     ChatScreen(friendId, friendName, navController)
                 }
@@ -526,8 +497,8 @@ fun Nav_Bar_ussage() {
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
         if (selected == NavItem.Map) {
             mapLayer(batteries, friendsLocations, currentPanLocation)
-            
-            // Search Bar Component
+
+            // Search Bar
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -539,8 +510,7 @@ fun Nav_Bar_ussage() {
                     onQueryChange = { mapSearchQuery = it },
                     onFocusChanged = { isSearchFocused = it },
                 )
-                
-                // Only show results if focused
+
                 androidx.compose.animation.AnimatedVisibility(
                     visible = isSearchFocused,
                     enter = androidx.compose.animation.slideInVertically(
@@ -554,99 +524,98 @@ fun Nav_Bar_ussage() {
                 ) {
                     Column {
                         Spacer(modifier = Modifier.height(8.dp))
-                    
-                    val allItems = buildList {
-                        batteries.forEach { add(it to null as UserLocation?) }
-                        friendsLocations.forEach { add(null as BatteryLocation? to it) }
-                    }
-                    
-                    val filtered = if (mapSearchQuery.isBlank()) {
-                        // Closest batteries if query is empty
-                        batteries.map { it to null as UserLocation? }.sortedBy {
-                            userLocation?.let { u -> haversineDistance(it.first.latitude, it.first.longitude, u.first, u.second) } ?: Double.MAX_VALUE
-                        }.take(3)
-                    } else {
-                        val queryLower = mapSearchQuery.lowercase()
-                        allItems.filter { item ->
-                            val b = item.first
-                            val f = item.second
-                            (b != null && b.name.lowercase().contains(queryLower)) ||
-                            (f != null && (f.username?.lowercase()?.contains(queryLower) == true))
-                        }.sortedBy {
-                            val lat = it.first?.latitude ?: it.second?.latitude ?: 0.0
-                            val lon = it.first?.longitude ?: it.second?.longitude ?: 0.0
-                            userLocation?.let { u -> haversineDistance(lat, lon, u.first, u.second) } ?: Double.MAX_VALUE
+
+                        val allItems = buildList {
+                            batteries.forEach { add(it to null as UserLocation?) }
+                            friendsLocations.forEach { add(null as BatteryLocation? to it) }
                         }
-                    }
-                    
-                    if (filtered.isNotEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color.White.copy(alpha = 0.95f),
-                            shadowElevation = 8.dp,
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
-                        ) {
-                            androidx.compose.foundation.lazy.LazyColumn(
-                                modifier = Modifier.fillMaxWidth().padding(8.dp)
+
+                        val filtered = if (mapSearchQuery.isBlank()) {
+                            batteries.map { it to null as UserLocation? }.sortedBy {
+                                userLocation?.let { u -> haversineDistance(it.first.latitude, it.first.longitude, u.first, u.second) } ?: Double.MAX_VALUE
+                            }.take(3)
+                        } else {
+                            val queryLower = mapSearchQuery.lowercase()
+                            allItems.filter { item ->
+                                val b = item.first
+                                val f = item.second
+                                (b != null && b.name.lowercase().contains(queryLower)) ||
+                                        (f != null && (f.username?.lowercase()?.contains(queryLower) == true))
+                            }.sortedBy {
+                                val lat = it.first?.latitude ?: it.second?.latitude ?: 0.0
+                                val lon = it.first?.longitude ?: it.second?.longitude ?: 0.0
+                                userLocation?.let { u -> haversineDistance(lat, lon, u.first, u.second) } ?: Double.MAX_VALUE
+                            }
+                        }
+
+                        if (filtered.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color.White.copy(alpha = 0.95f),
+                                shadowElevation = 8.dp,
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
                             ) {
-                                if (mapSearchQuery.isBlank()) {
-                                    item {
-                                        Text(
-                                            "Closest Batteries",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            color = Color.Gray,
-                                            modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp)
-                                        )
+                                androidx.compose.foundation.lazy.LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                                ) {
+                                    if (mapSearchQuery.isBlank()) {
+                                        item {
+                                            Text(
+                                                "Closest Batteries",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = Color.Gray,
+                                                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    items(filtered.size) { index ->
+                                        val item = filtered[index]
+                                        val b = item.first
+                                        val f = item.second
+                                        val name = b?.name ?: f?.username ?: "Unknown"
+                                        val lat = b?.latitude ?: f?.latitude ?: 0.0
+                                        val lon = b?.longitude ?: f?.longitude ?: 0.0
+                                        val distKm = userLocation?.let { haversineDistance(lat, lon, it.first, it.second) }
+
+                                        val distText = if (distKm != null) {
+                                            if (distKm < 1.0) "${(distKm * 1000).toInt()} m" else "${(distKm * 10.0).roundToInt() / 10.0} km"
+                                        } else ""
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    currentPanLocation = Pair(lat, lon)
+                                                    platformFocusManager.clearFocus()
+                                                    mapSearchQuery = ""
+                                                }
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (b != null) Icons.Default.BatteryChargingFull else Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = if (b != null) GreenDark else Color(0xFF43BBF7),
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(name, fontWeight = FontWeight.Medium, color = Color.DarkGray)
+                                                if (distText.isNotEmpty()) {
+                                                    Text(distText, fontSize = 12.sp, color = Color.Gray)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
-                                
-                                items(filtered.size) { index ->
-                                    val item = filtered[index]
-                                    val b = item.first
-                                    val f = item.second
-                                    val name = b?.name ?: f?.username ?: "Unknown"
-                                    val lat = b?.latitude ?: f?.latitude ?: 0.0
-                                    val lon = b?.longitude ?: f?.longitude ?: 0.0
-                                    val distKm = userLocation?.let { haversineDistance(lat, lon, it.first, it.second) }
-                                    
-                                    val distText = if (distKm != null) {
-                                        if (distKm < 1.0) "${(distKm * 1000).toInt()} m" else "${(distKm * 10.0).roundToInt() / 10.0} km"
-                                    } else ""
-                                    
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                currentPanLocation = Pair(lat, lon)
-                                                platformFocusManager.clearFocus()
-                                                mapSearchQuery = ""
-                                            }
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (b != null) Icons.Default.BatteryChargingFull else Icons.Default.Person,
-                                            contentDescription = null,
-                                            tint = if (b != null) GreenDark else Color(0xFF43BBF7),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column {
-                                            Text(name, fontWeight = FontWeight.Medium, color = Color.DarkGray)
-                                            if (distText.isNotEmpty()) {
-                                                Text(distText, fontSize = 12.sp, color = Color.Gray)
-                                            }
-                                        } // Column (distText)
-                                    } // Row
-                                } // items
-                            } // LazyColumn
-                        } // Surface
-                    } // if(filtered)
-                } // Column under AnimatedVisibility
-            } // AnimatedVisibility
-            } // Search Bar Component Column
+                            }
+                        }
+                    }
+                }
+            }
         } else {
             if (!isChatScreen) {
                 mapLayer(batteries, friendsLocations, currentPanLocation)
@@ -691,7 +660,7 @@ fun Nav_Bar_ussage() {
         }
 
         if (!isChatScreen) {
-            // Navbar bar — flush to bottom
+            // Navbar — flush to bottom
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -710,12 +679,12 @@ fun Nav_Bar_ussage() {
                 )
             }
 
-            // Floating lightning bolt button — sits above the navbar, no clipping
+            // Floating lightning bolt button — navigates to StartTrip (independent of Account tab)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 46.dp) // adjusted for the new navbar spacing
-                    .size(68.dp) // Larger white circle behind
+                    .padding(bottom = 46.dp)
+                    .size(68.dp)
                     .shadow(
                         elevation = 8.dp,
                         shape = CircleShape,
@@ -732,22 +701,23 @@ fun Nav_Bar_ussage() {
                         .size(56.dp)
                         .clip(CircleShape)
                         .background(LightningBlue)
-                        .clickable { showQrScanner = true },
+                        .clickable {
+                            navController.navigate(Screen.StartTrip.route) {
+                                popUpTo(Screen.Map.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.FlashOn,
-                        contentDescription = "Scan QR",
+                        contentDescription = "Start Trip",
                         tint = Color.White,
                         modifier = Modifier.size(28.dp),
                     )
                 }
             }
-        }
-
-        // QR Scanner overlay
-        if (showQrScanner) {
-            QrScannerScreen(onDismiss = { showQrScanner = false })
         }
     }
 }
@@ -1019,48 +989,9 @@ fun UserRow(
                     }
                 }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(profile.displayName ?: "User", fontWeight = FontWeight.SemiBold)
-                Text(profile.email ?: "", fontSize = 12.sp, color = Color.Gray)
-            }
-            if (actionLabel != null) {
-                Button(
-                    onClick = onAction,
-                    enabled = enabled,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = GreenBright,
-                        disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(actionLabel, fontSize = 12.sp)
-                }
-            }
-            if (showOptions) {
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Remove", color = Color.Red) },
-                            onClick = {
-                                showMenu = false
-                                onRemove?.invoke()
-                            }
-                        )
-                    }
-                }
-            }
         }
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
