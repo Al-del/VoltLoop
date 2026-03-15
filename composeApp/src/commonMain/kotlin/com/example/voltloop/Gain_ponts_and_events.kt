@@ -293,7 +293,6 @@ private fun EventCard(event: EcoEvent, onProve: () -> Unit, isLocked: Boolean) {
     }
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
 @Composable
 private fun HeaderSection(totalPoints: Int) {
     Row(
