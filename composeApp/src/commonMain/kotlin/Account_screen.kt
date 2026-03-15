@@ -23,7 +23,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -46,15 +50,14 @@ data class TripHistory(
 
 // Helper to resolve a display name from a Profile,
 // preferring username but falling back to the email local-part.
-private fun Profile.displayName(): String =
+internal fun Profile.displayName(): String =
     username?.takeIf { it.isNotBlank() }
         ?: email?.substringBefore("@")
         ?: "?"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountScreen() {
-    var showLeaderboard by remember { mutableStateOf(false) }
-
+fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
     val username = AppState.currentUser.value?.let { user ->
         AppState.friends.value.find { it.id == user.id }?.displayName()
             ?: user.email?.substringBefore("@")
@@ -63,6 +66,12 @@ fun AccountScreen() {
 
     var history by remember { mutableStateOf<List<TripHistory>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var showEditProfile by remember { mutableStateOf(false) }
+    
+    val profileImage = AppState.friends.value.find { it.id == AppState.currentUser.value?.id }?.avatarUrl
+    val imagePicker = rememberImagePicker()
+    val scope = rememberCoroutineScope()
+    var isUploading by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         try {
@@ -72,6 +81,17 @@ fun AccountScreen() {
                 .select { filter { eq("email", email) } }
                 .decodeSingle<Profile>()
             println("TEST PROFILE $profile")
+            
+            // Sync the fetched profile into AppState so the avatarImage variable works immediately
+            val currentFriends = AppState.friends.value.toMutableList()
+            val existingIdx = currentFriends.indexOfFirst { it.id == profile.id }
+            if (existingIdx != -1) {
+                currentFriends[existingIdx] = profile
+            } else {
+                currentFriends.add(profile)
+            }
+            AppState.friends.value = currentFriends
+            
             val rows = supabase.postgrest["History"]
                 .select { filter { eq("Name", email) } }
                 .decodeList<TripHistory>()
@@ -108,399 +128,311 @@ fun AccountScreen() {
 
     val listFriends = if (leaderboard.size >= 3) leaderboard.drop(3) else leaderboard
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PageBg),
-        contentPadding = PaddingValues(bottom = 100.dp)
+            .background(PageBg)
     ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
         // ── Header ──────────────────────────────────────────────
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
                     .background(Color.White)
-                    .padding(top = 52.dp, bottom = 20.dp),
-                contentAlignment = Alignment.Center
+                    .padding(top = 100.dp, bottom = 40.dp), // Increased padding to push down
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(BlueSoft),
-                        contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (showLeaderboard) "🏆" else username.take(1).uppercase(),
-                            fontSize = if (showLeaderboard) 28.sp else 24.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = BlueAccent
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = if (showLeaderboard) "Leaderboard" else username,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = if (showLeaderboard) "Friends ranking" else "Trip History",
-                        fontSize = 13.sp,
-                        color = TextSecond
-                    )
-
-                    Spacer(Modifier.height(16.dp))
-
-                    // ── Toggle pill ──────────────────────────────
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50.dp))
-                            .background(PageBg)
-                            .padding(4.dp)
-                    ) {
-                        Row {
-                            ToggleTab(
-                                label = "⚡  History",
-                                selected = !showLeaderboard,
-                                onClick = { showLeaderboard = false }
+                        Box(
+                            modifier = Modifier.size(88.dp)
+                        ) {
+                            if (profileImage != null) {
+                                AsyncImage(
+                                    model = profileImage,
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(BlueSoft),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = username.take(1).uppercase(),
+                                        fontSize = 40.sp, // Bigger text
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = BlueAccent
+                                    )
+                                }
+                            }
+                            
+                            // Edit Badge (+)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .size(28.dp)
+                                    .offset(x = 4.dp, y = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
+                                    .padding(2.dp)
+                                    .clip(CircleShape)
+                                    .background(BlueAccent)
+                                    .clickable {
+                                        if (!isUploading) {
+                                            imagePicker.launch { bytes ->
+                                                if (bytes != null) {
+                                                    val uId = AppState.currentUser.value?.id ?: return@launch
+                                                    isUploading = true
+                                                    scope.launch {
+                                                        try {
+                                                            println("AVATAR_UPLOAD_START: userId=$uId")
+                                                            val url = uploadAvatarAndSave(bytes, uId)
+                                                            println("AVATAR_UPLOAD_FINISH: newUrl=$url")
+                                                            if (url != null) {
+                                                                // Refresh friends list to trigger UI update
+                                                                val newList = AppState.friends.value.toMutableList()
+                                                                val idx = newList.indexOfFirst { it.id == uId }
+                                                                
+                                                                if (idx != -1) {
+                                                                    newList[idx] = newList[idx].copy(avatarUrl = url)
+                                                                } else {
+                                                                    // Profile isn't in friends list yet, append a stub so UI refreshes
+                                                                    val email = AppState.currentUser.value?.email
+                                                                    newList.add(Profile(id = uId, avatarUrl = url, email = email))
+                                                                }
+                                                                
+                                                                AppState.friends.value = newList
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            println("AVATAR_UPLOAD_UI_ERROR: ${e.message}")
+                                                        } finally {
+                                                            isUploading = false
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isUploading) {
+                                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                                } else {
+                                    Text("+", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = (-1).dp))
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(20.dp))
+                        Column {
+                            Text(
+                                text = username,
+                                fontSize = 28.sp, // Bigger name
+                                fontWeight = FontWeight.ExtraBold,
+                                color = TextPrimary
                             )
-                            Spacer(Modifier.width(4.dp))
-                            ToggleTab(
-                                label = "🏆  Leaderboard",
-                                selected = showLeaderboard,
-                                onClick = { showLeaderboard = true }
-                            )
+                            if (AppState.currentUser.value?.email != null) {
+                                Text(
+                                    text = AppState.currentUser.value?.email ?: "",
+                                    fontSize = 16.sp, // Bigger email
+                                    color = TextSecond
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            // Edit Profile Button
+                            Button(
+                                onClick = { showEditProfile = true },
+                                modifier = Modifier.height(32.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2B8CD1)), // Darker blue
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Text("Edit Profile ✏️", fontSize = 12.sp, color = Color.White)
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ════════════════════════════════════════════════════════
-        // HISTORY VIEW
-        // ════════════════════════════════════════════════════════
-        if (!showLeaderboard) {
-            if (isLoading) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
-                        contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator(color = BlueAccent) }
-                }
-            } else if (history.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
-                        contentAlignment = Alignment.Center
+        // ── Menu Section ──────────────────────────────────────────────
+        item {
+            Spacer(Modifier.height(16.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            ) {
+                // Notifications Menu Button
+                Surface(
+                    onClick = onNavigateToNotifications,
+                    color = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    shadowElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(BlueSoft),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🔔", fontSize = 18.sp)
+                        }
+                        Spacer(Modifier.width(16.dp))
                         Text(
-                            text = "No trips yet ⚡\nStart riding to see your history!",
-                            color = TextSecond,
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center
+                            text = "Notifications",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary,
+                            modifier = Modifier.weight(1f)
                         )
+                        Text("❯", color = TextSecond, fontSize = 16.sp)
                     }
                 }
-            } else {
-                item {
-                    Text(
-                        text = "${history.size} TRIPS",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextSecond,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                    )
-                }
-                items(history) { trip -> TripCard(trip = trip) }
+                
             }
         }
-
-        // ════════════════════════════════════════════════════════
-        // LEADERBOARD VIEW
-        // ════════════════════════════════════════════════════════
-        if (showLeaderboard) {
-            if (leaderboard.size >= 3) {
-                item {
-                    Spacer(Modifier.height(20.dp))
-                    PodiumRow(friends = leaderboard.take(3))
-                    Spacer(Modifier.height(20.dp))
-                }
-            }
-
-            if (listFriends.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "RANKINGS",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextSecond,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                }
-            }
-
-            if (listFriends.isEmpty() && leaderboard.size < 3) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No friends yet 😢\nAdd some to see rankings!",
-                            color = TextSecond,
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            } else {
-                itemsIndexed(listFriends) { index, profile ->
-                    val rank = index + (if (leaderboard.size >= 3) 4 else 1)
-                    val isCurrentUser = profile.id == AppState.currentUser.value?.id
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
-                        FriendRankCard(rank = rank, profile = profile, highlight = isCurrentUser)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── Toggle tab button ────────────────────────────────────────
-@Composable
-fun ToggleTab(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bgColor by animateColorAsState(
-        targetValue = if (selected) BlueAccent else Color.Transparent,
-        animationSpec = tween(200)
-    )
-    val textColor by animateColorAsState(
-        targetValue = if (selected) Color.White else TextSecond,
-        animationSpec = tween(200)
-    )
+    } // End of LazyColumn
+    
+    // Sign Out Button pinned to the bottom right
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(50.dp))
-            .background(bgColor)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = textColor
-        )
-    }
-}
-
-// ── Trip card ────────────────────────────────────────────────
-@Composable
-fun TripCard(trip: TripHistory) {
-    val displayTime = try {
-        trip.time.replace("T", " ").substringBefore(".")
-    } catch (e: Exception) { trip.time }
-
-    Surface(
-        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        shadowElevation = 3.dp
+            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(bottom = 60.dp), // extra padding for bottom nav if needed
+        contentAlignment = Alignment.BottomEnd
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(44.dp).clip(CircleShape).background(BlueSoft),
-                contentAlignment = Alignment.Center
-            ) { Text("⚡", fontSize = 20.sp) }
-
-            Spacer(Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(trip.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = TextPrimary)
-                Text(displayTime, fontSize = 12.sp, color = TextSecond)
-            }
-
-            Surface(shape = RoundedCornerShape(20.dp), color = BlueSoft) {
-                Text(
-                    text = "+${trip.points} pts",
-                    color = BlueAccent,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
-            }
-        }
-    }
-}
-
-// ── Podium row ───────────────────────────────────────────────
-@Composable
-fun PodiumRow(friends: List<Profile>) {
-    val order   = listOf(1, 0, 2)
-    val heights = listOf(72.dp, 100.dp, 56.dp)
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        order.forEachIndexed { i, friendIndex ->
-            val profile     = friends[friendIndex]
-            val rank        = friendIndex + 1
-            val medalColor  = when (rank) { 1 -> GoldColor; 2 -> SilverColor; else -> BronzeColor }
-            val medal       = when (rank) { 1 -> "🥇"; 2 -> "🥈"; else -> "🥉" }
-            val displayName = profile.displayName()
-            val isCurrentUser = profile.id == AppState.currentUser.value?.id
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(medal, fontSize = if (rank == 1) 28.sp else 22.sp)
-                Spacer(Modifier.height(4.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(if (rank == 1) 60.dp else 48.dp)
-                        .shadow(
-                            6.dp, CircleShape,
-                            ambientColor = if (isCurrentUser) BlueAccent.copy(alpha = 0.5f) else medalColor.copy(alpha = 0.4f),
-                            spotColor    = if (isCurrentUser) BlueAccent.copy(alpha = 0.5f) else medalColor.copy(alpha = 0.4f)
-                        )
-                        .clip(CircleShape)
-                        .background(if (isCurrentUser) BlueSoft else Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = displayName.take(1).uppercase(),
-                        color = BlueAccent,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = if (rank == 1) 24.sp else 18.sp
-                    )
-                }
-
-                Spacer(Modifier.height(6.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        displayName,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (isCurrentUser) {
-                        Spacer(Modifier.width(3.dp))
-                        Text("(you)", color = BlueAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Text("${profile.points} pts", color = medalColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Spacer(Modifier.height(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.75f)
-                        .height(heights[i])
-                        .shadow(4.dp, RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-                        .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-                        .background(Color.White),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Box(Modifier.fillMaxWidth().height(4.dp).background(medalColor))
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("#$rank", color = TextSecond, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+        TextButton(
+            onClick = {
+                scope.launch {
+                    try {
+                        supabase.auth.signOut()
+                        AppState.currentUser.value = null
+                        AppState.friends.value = emptyList()
+                        AppState.globalNotifications.value = emptyList()
+                        AppState.totalPoints.value = 0
+                    } catch (e: Exception) {
+                        println("SIGN_OUT_ERROR: ${e.message}")
                     }
                 }
             }
-        }
-    }
-}
-
-// ── Friend rank card ─────────────────────────────────────────
-@Composable
-fun FriendRankCard(rank: Int, profile: Profile, highlight: Boolean = false) {
-    val displayName = profile.displayName()
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = if (highlight) BlueSoft else CardBg,
-        shadowElevation = 3.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "#$rank",
-                color = if (highlight) BlueAccent else TextSecond,
+                text = "Sign Out",
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                modifier = Modifier.width(36.dp)
+                color = Color(0xFFFF4B4B)
             )
+        }
+    }
+} // End of Column
 
-            Box(
-                modifier = Modifier.size(44.dp).clip(CircleShape)
-                    .background(if (highlight) BlueAccent else BlueSoft),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    displayName.take(1).uppercase(),
-                    color = if (highlight) Color.White else BlueAccent,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 18.sp
-                )
-            }
+    if (showEditProfile) {
+        ModalBottomSheet(
+            onDismissRequest = { showEditProfile = false },
+            containerColor = Color.White
+        ) {
+            EditProfileSheetContent(
+                currentUsername = username,
+                onDismiss = { showEditProfile = false }
+            )
+        }
+    }
+}
 
-            Spacer(Modifier.width(12.dp))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditProfileSheetContent(currentUsername: String, onDismiss: () -> Unit) {
+    var newUsername by remember { mutableStateOf(currentUsername) }
+    var isSaving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val userId = AppState.currentUser.value?.id
 
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    displayName,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (highlight) {
-                    Spacer(Modifier.width(6.dp))
-                    Surface(shape = RoundedCornerShape(20.dp), color = BlueAccent) {
-                        Text(
-                            "you",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                        )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .padding(bottom = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Edit Profile", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Spacer(Modifier.height(24.dp))
+        
+        OutlinedTextField(
+            value = newUsername,
+            onValueChange = { newUsername = it },
+            label = { Text("Username") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                if (newUsername.isNotBlank() && userId != null) {
+                    scope.launch {
+                        isSaving = true
+                        try {
+                            supabase.postgrest["profiles"]
+                                .update({
+                                    set("username", newUsername)
+                                    set("display_name", newUsername)
+                                }) {
+                                    filter { eq("id", userId) }
+                                }
+                            
+                            // Refresh local AppState
+                            val updatedProfile = AppState.friends.value.find { it.id == userId }?.copy(username = newUsername, displayName = newUsername)
+                            if (updatedProfile != null) {
+                                val newList = AppState.friends.value.toMutableList()
+                                val idx = newList.indexOfFirst { it.id == userId }
+                                if (idx != -1) newList[idx] = updatedProfile
+                                AppState.friends.value = newList
+                            }
+                            onDismiss()
+                        } catch (e: Exception) {
+                            println("UPDATE_USERNAME_ERROR: ${e.message}")
+                        } finally {
+                            isSaving = false
+                        }
                     }
                 }
-            }
-
-            Surface(shape = RoundedCornerShape(20.dp), color = if (highlight) BlueAccent else BlueSoft) {
-                Text(
-                    "${profile.points} pts",
-                    color = if (highlight) Color.White else BlueAccent,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BlueAccent),
+            enabled = !isSaving
+        ) {
+            if (isSaving) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            } else {
+                Text("Save Changes", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }

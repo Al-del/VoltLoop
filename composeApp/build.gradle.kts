@@ -6,7 +6,12 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    kotlin("plugin.serialization") // Fix: use version catalog alias instead of kotlin()
+    kotlin("plugin.serialization") 
+}
+
+repositories {
+    mavenCentral()
+    google()
 }
 
 val ktorVersion = "3.0.3"
@@ -86,12 +91,17 @@ androidMain.dependencies {
             implementation("io.github.jan-tennert.supabase:auth-kt:3.0.3")
             implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.3")
             implementation("io.github.jan-tennert.supabase:realtime-kt:3.0.3")
+            implementation("io.github.jan-tennert.supabase:storage-kt:3.0.3")
 
             // Kotlin serialization
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             // Coroutines
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
             implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+            
+            // Coil 3 for cross-platform image loading
+            implementation("io.coil-kt.coil3:coil-compose:3.0.0-rc01")
+            implementation("io.coil-kt.coil3:coil-network-ktor3:3.0.0-rc01")
         }
 
         val iosMain by creating {

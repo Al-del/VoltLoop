@@ -58,6 +58,7 @@ private val LightningBlue = Color(0xFF43BBF7)
 
 sealed class Screen(val route: String) {
     object Settings : Screen("settings")
+    object Notifications : Screen("notifications")
     object Map : Screen("map")
     object StartTrip : Screen("start_trip")
     object Account : Screen("account")
@@ -96,7 +97,7 @@ fun WhiteNavBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp).padding(horizontal = 8.dp),
         ) {
-            listOf(NavItem.History, NavItem.Account).forEach { item ->
+            listOf(NavItem.Account, NavItem.History).forEach { item ->
                 NavIconButton(item = item, isSelected = item == selected, onClick = { onItemSelected(item) })
             }
             Spacer(modifier = Modifier.width(72.dp))
@@ -334,8 +335,11 @@ fun Nav_Bar_ussage() {
     val navHostLayer = remember {
         movableContentOf {
             NavHost(navController = navController, startDestination = Screen.Map.route, modifier = Modifier.fillMaxSize()) {
-                composable(Screen.Settings.route)  { AccountScreen() }
-                composable(Screen.Account.route)   { AccountScreen() }
+                composable(Screen.Settings.route)  { HistoryScreen() }
+                composable(Screen.Account.route)   { AccountScreen(onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) }) }
+                composable(Screen.Notifications.route) { 
+                    NotificationsScreen(onBackClick = { navController.popBackStack() })
+                }
                 composable(Screen.StartTrip.route) { Start_Trip() }
                 composable(Screen.Friends.route)   { FriendsScreen(navController) }
                 composable(Screen.Store.route)     { StoreScreen() }
