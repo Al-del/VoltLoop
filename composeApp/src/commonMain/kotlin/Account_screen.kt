@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,7 +61,10 @@ internal fun Profile.displayName(): String =
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
+fun AccountScreen(
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToStore: () -> Unit = {}
+) {
     val username = AppState.currentUser.value?.let { user ->
         AppState.friends.value.find { it.id == user.id }?.displayName()
             ?: user.email?.substringBefore("@")
@@ -85,7 +89,7 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
                 .decodeSingle<Profile>()
             println("TEST PROFILE $profile")
             
-            // Sync the fetched profile into AppState so the avatarImage variable works immediately
+            // Sync the fetched profile into AppState
             val currentFriends = AppState.friends.value.toMutableList()
             val existingIdx = currentFriends.indexOfFirst { it.id == profile.id }
             if (existingIdx != -1) {
@@ -94,15 +98,11 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
                 currentFriends.add(profile)
             }
             AppState.friends.value = currentFriends
+            AppState.currentMultiplier.value = profile.pointsMultiplier
             
             val rows = supabase.postgrest["History"]
                 .select { filter { eq("Name", email) } }
                 .decodeList<TripHistory>()
-
-            println("TEST HISTORY size=${rows.size}")
-            rows.forEachIndexed { i, trip ->
-                println("TEST HISTORY [$i] name=${trip.name} time=${trip.time} points=${trip.points}")
-            }
 
             history = rows.sortedByDescending { it.time }
         } catch (e: Exception) {
@@ -287,48 +287,22 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Notifications Menu Button
-                Surface(
-                    onClick = onNavigateToNotifications,
-                    color = Color.White,
-                    shape = RoundedCornerShape(16.dp),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(BlueSoft),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = BlueAccent
-                            )
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Text(
-                            text = "Notifications",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text("❯", color = TextSecond, fontSize = 16.sp)
-                    }
-                }
-                
+                MenuButton(
+                    label = "Notifications",
+                    icon = Icons.Default.Notifications,
+                    onClick = onNavigateToNotifications
+                )
+
+                // VoltStore Menu Button
+                MenuButton(
+                    label = "VoltStore",
+                    icon = Icons.Default.ShoppingCart,
+                    onClick = onNavigateToStore
+                )
             }
         }
     } // End of LazyColumn
@@ -375,6 +349,48 @@ fun AccountScreen(onNavigateToNotifications: () -> Unit = {}) {
                 currentUsername = username,
                 onDismiss = { showEditProfile = false }
             )
+        }
+    }
+}
+
+@Composable
+private fun MenuButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = Color.White,
+        shape = RoundedCornerShape(16.dp),
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(BlueSoft),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = BlueAccent
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Text(
+                text = label,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
+            Text("❯", color = TextSecond, fontSize = 16.sp)
         }
     }
 }

@@ -6,6 +6,7 @@ import io.github.jan.supabase.auth.user.UserInfo
 object AppState {
     var currentUser = mutableStateOf<UserInfo?>(null)
     var totalPoints = mutableStateOf(0)
+    var currentMultiplier = mutableStateOf(1)
     val friends = mutableStateOf<List<Profile>>(emptyList())
     val globalNotifications = mutableStateOf<List<AppNotification>>(emptyList())
 }

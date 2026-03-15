@@ -65,8 +65,9 @@ suspend fun syncPointsFromDb() {
         val profile = supabase.postgrest["profiles"]
             .select { filter { eq("email", email) } }
             .decodeSingle<Profile>()
-        AppState.totalPoints.value = (profile.points ?: 0) as Int
-        println("POINTS_SYNCED: ${AppState.totalPoints.value}")
+        AppState.totalPoints.value = (profile.points ?: 0).toInt()
+        AppState.currentMultiplier.value = profile.pointsMultiplier
+        println("POINTS_SYNCED: ${AppState.totalPoints.value}, MULTIPLIER: ${AppState.currentMultiplier.value}")
     } catch (e: Exception) {
         println("POINTS_SYNC_ERROR: ${e.message}")
     }
@@ -88,7 +89,7 @@ private suspend fun pushPointsToDb(newPoints: Int) {
         val confirmed = supabase.postgrest["profiles"]
             .select { filter { eq("email", email) } }
             .decodeSingle<Profile>()
-        AppState.totalPoints.value = (confirmed.points ?: 0) as Int
+        AppState.totalPoints.value = (confirmed.points ?: 0).toInt()
         println("POINTS_CONFIRMED_DB: ${AppState.totalPoints.value}")
 
     } catch (e: Exception) {
@@ -104,6 +105,7 @@ fun TimerScreen() {
     var provingEvent   by remember { mutableStateOf<EcoEvent?>(null) }
     var runningSeconds by remember { mutableStateOf(0) }
     val totalPoints    by AppState.totalPoints
+    val multiplier     by AppState.currentMultiplier
 
     val scope  = rememberCoroutineScope()
     val events = remember { mutableStateListOf<EcoEvent>() }
@@ -598,7 +600,9 @@ private fun DoneBanner(
 ) {
     val scope        = rememberCoroutineScope()
     var locking      by remember { mutableStateOf(false) }
-    val pointsEarned = (provedCount * 10) + 5
+    val basePoints   = (provedCount * 10) + 5
+    val multiplier   = AppState.currentMultiplier.value
+    val pointsEarned = basePoints * multiplier
 
     Surface(
         modifier        = Modifier
@@ -690,7 +694,11 @@ private fun DoneBanner(
                                 color      = AmberAccent
                             )
                         }
-                        Text("points earned", fontSize = 12.sp, color = TextSecond)
+                        if (multiplier > 1) {
+                            Text("x$multiplier multiplier!", fontSize = 10.sp, color = AmberAccent, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("points earned", fontSize = 12.sp, color = TextSecond)
+                        }
                     }
                 }
             }

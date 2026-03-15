@@ -336,13 +336,18 @@ fun Nav_Bar_ussage() {
         movableContentOf {
             NavHost(navController = navController, startDestination = Screen.Map.route, modifier = Modifier.fillMaxSize()) {
                 composable(Screen.Settings.route)  { HistoryScreen() }
-                composable(Screen.Account.route)   { AccountScreen(onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) }) }
+                composable(Screen.Account.route)   { 
+                    AccountScreen(
+                        onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
+                        onNavigateToStore = { navController.navigate(Screen.Store.route) }
+                    ) 
+                }
                 composable(Screen.Notifications.route) { 
                     NotificationsScreen(onBackClick = { navController.popBackStack() })
                 }
                 composable(Screen.StartTrip.route) { Start_Trip() }
                 composable(Screen.Friends.route)   { FriendsScreen(navController) }
-                composable(Screen.Store.route)     { StoreScreen() }
+                composable(Screen.Store.route)     { StoreScreen(onBackClick = { navController.popBackStack() }) }
                 composable(Screen.Chat.route) { backStackEntry ->
                     val friendId   = backStackEntry.arguments?.getString("friendId")   ?: ""
                     val friendName = backStackEntry.arguments?.getString("friendName") ?: "Chat"
