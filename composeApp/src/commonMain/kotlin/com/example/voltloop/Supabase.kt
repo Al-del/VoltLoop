@@ -9,7 +9,10 @@ val supabase = createSupabaseClient(
     supabaseUrl = Secrets.SUPABASE_URL,
     supabaseKey = Secrets.SUPABASE_ANON_KEY
 ) {
-    install(Auth)
+    install(Auth) {
+        scheme = "voltloop"
+        host = "login-callback"
+    }
     install(Postgrest)
     install(Realtime)
 }
