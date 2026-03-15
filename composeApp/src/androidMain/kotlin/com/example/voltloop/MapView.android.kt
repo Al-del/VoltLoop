@@ -64,7 +64,9 @@ actual fun MapView(
     batteries: List<BatteryLocation>,
     friends: List<UserLocation>,
     onLocationUpdate: ((Double, Double) -> Unit)?,
-    onMapClick: ((Double, Double) -> Unit)?
+    onMapClick: ((Double, Double) -> Unit)?,
+    onFriendChatClick: ((String, String) -> Unit)?,
+    panToLocation: Pair<Double, Double>?
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -145,6 +147,13 @@ actual fun MapView(
             }
         } else {
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+
+    LaunchedEffect(panToLocation) {
+        panToLocation?.let {
+            val userLatLng = LatLng(it.first, it.second)
+            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(userLatLng, 15f))
         }
     }
 

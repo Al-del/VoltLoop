@@ -10,5 +10,6 @@ expect fun MapView(
     friends: List<UserLocation> = emptyList(),
     onLocationUpdate: ((Double, Double) -> Unit)? = null,
     onMapClick: ((Double, Double) -> Unit)? = null,
-    onFriendChatClick: ((String, String) -> Unit)? = null
+    onFriendChatClick: ((String, String) -> Unit)? = null,
+    panToLocation: Pair<Double, Double>? = null
 )

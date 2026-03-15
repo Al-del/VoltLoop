@@ -21,6 +21,8 @@ import platform.CoreLocation.CLLocationManagerDelegateProtocol
 class FriendAnnotation(val friendId: String, val username: String) : MKPointAnnotation()
 class StationAnnotation(val stationId: String) : MKPointAnnotation()
 
+class PanState(var location: Pair<Double, Double>? = null)
+
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 @Composable
 actual fun MapView(
@@ -29,8 +31,10 @@ actual fun MapView(
     friends: List<UserLocation>,
     onLocationUpdate: ((Double, Double) -> Unit)?,
     onMapClick: ((Double, Double) -> Unit)?,
-    onFriendChatClick: ((String, String) -> Unit)?
+    onFriendChatClick: ((String, String) -> Unit)?,
+    panToLocation: Pair<Double, Double>?
 ) {
+    val panState = remember { PanState() }
     val locationManager = remember { CLLocationManager() }
     
     val locationDelegate = remember {
@@ -53,7 +57,9 @@ actual fun MapView(
     val batteryImageLarge = remember { createResizedImage("one_battery", 70.0) }
     val clusterImage = remember { createResizedImage("more_batteries", 80.0) }
 
-    val combinedDelegate = remember(friends, batteryImageSmall, batteryImageMedium, batteryImageLarge, clusterImage) {
+    val currentOnFriendChatClick by rememberUpdatedState(onFriendChatClick)
+
+    val combinedDelegate = remember(batteryImageSmall, batteryImageMedium, batteryImageLarge, clusterImage) {
         object : NSObject(), MKMapViewDelegateProtocol, UIGestureRecognizerDelegateProtocol {
             var hasZoomedToUser = false
 
@@ -68,7 +74,7 @@ actual fun MapView(
 
             override fun mapView(mapView: MKMapView, viewForAnnotation: MKAnnotationProtocol): MKAnnotationView? {
                 if (viewForAnnotation is MKUserLocation) return null
-                
+
                 if (viewForAnnotation is MKClusterAnnotation) {
                     val identifier = "ClusterView"
                     var annotationView = mapView.dequeueReusableAnnotationViewWithIdentifier(identifier)
@@ -77,26 +83,27 @@ actual fun MapView(
                     } else {
                         annotationView.annotation = viewForAnnotation
                     }
-                    annotationView.image = clusterImage ?: createFallbackClusterImage(viewForAnnotation.memberAnnotations.size)
+                    // Always re-apply image — dequeued views lose it on recycle
+                    val memberCount = (viewForAnnotation as MKClusterAnnotation).memberAnnotations.size
+                    annotationView!!.image = clusterImage ?: createFallbackClusterImage(memberCount)
                     return annotationView
                 }
 
                 if (viewForAnnotation is FriendAnnotation) {
-                    val identifier = "FriendView_${viewForAnnotation.friendId}"
+                    val identifier = "FriendView"
                     var annotationView = mapView.dequeueReusableAnnotationViewWithIdentifier(identifier)
                     if (annotationView == null) {
                         annotationView = MKAnnotationView(viewForAnnotation, identifier)
                         annotationView.canShowCallout = true
-                        
-                        // Add chat button to callout
                         val btn = UIButton.buttonWithType(UIButtonTypeDetailDisclosure)
                         btn.setImage(UIImage.systemImageNamed("message.fill"), forState = UIControlStateNormal)
                         annotationView.rightCalloutAccessoryView = btn
                     } else {
                         annotationView.annotation = viewForAnnotation
                     }
-                    annotationView.image = createFriendUIImage(viewForAnnotation.username.take(1).uppercase())
-                    annotationView.clusteringIdentifier = null // Friends don't cluster
+                    // Always re-apply — dequeued views must be refreshed
+                    annotationView!!.image = createFriendUIImage(viewForAnnotation.username.take(1).uppercase())
+                    annotationView.clusteringIdentifier = null
                     return annotationView
                 }
 
@@ -109,15 +116,17 @@ actual fun MapView(
                     } else {
                         annotationView.annotation = viewForAnnotation
                     }
-                    
-                    annotationView.clusteringIdentifier = "battery"
-                    mapView.region.useContents {
-                        annotationView.image = when {
+                    // Always set clusteringIdentifier AND image on every call
+                    // (dequeued views lose their image — this is the cause of red default pins)
+                    annotationView!!.clusteringIdentifier = "battery"
+                    val img = mapView.region.useContents {
+                        when {
                             span.latitudeDelta < 0.005 -> batteryImageLarge
-                            span.latitudeDelta < 0.02 -> batteryImageMedium
-                            else -> batteryImageSmall
+                            span.latitudeDelta < 0.02  -> batteryImageMedium
+                            else                        -> batteryImageSmall
                         }
                     }
+                    annotationView.image = img ?: batteryImageSmall
                     return annotationView
                 }
 
@@ -127,7 +136,7 @@ actual fun MapView(
             override fun mapView(mapView: MKMapView, annotationView: MKAnnotationView, calloutAccessoryControlTapped: UIControl) {
                 val annotation = annotationView.annotation
                 if (annotation is FriendAnnotation) {
-                    onFriendChatClick?.invoke(annotation.friendId, annotation.username)
+                    currentOnFriendChatClick?.invoke(annotation.friendId, annotation.username)
                 }
             }
 
@@ -150,6 +159,10 @@ actual fun MapView(
         }
     }
 
+    // Keep strong Kotlin references to custom annotations to prevent K/N GC from stripping their Kotlin identity
+    val stationAnnotationsMap = remember { mutableMapOf<String, StationAnnotation>() }
+    val friendAnnotationsMap = remember { mutableMapOf<String, FriendAnnotation>() }
+
     UIKitView(
         factory = {
             MKMapView().apply {
@@ -166,6 +179,15 @@ actual fun MapView(
         modifier = modifier,
         interactive = true,
         update = { view ->
+            view.delegate = combinedDelegate
+            
+            if (panToLocation != null && panToLocation != panState.location) {
+                val loc = CLLocationCoordinate2DMake(panToLocation.first, panToLocation.second)
+                val region = MKCoordinateRegionMakeWithDistance(loc, 1500.0, 1500.0)
+                view.setRegion(region, animated = true)
+                panState.location = panToLocation
+            }
+            
             val currentAnnotations = view.annotations.toList()
             
             // Sync Friends
@@ -177,11 +199,15 @@ actual fun MapView(
                     val newAnn = FriendAnnotation(friend.id, friend.username ?: "Friend")
                     newAnn.setCoordinate(CLLocationCoordinate2DMake(friend.latitude, friend.longitude))
                     newAnn.setTitle(friend.username ?: "Friend")
+                    friendAnnotationsMap[friend.id] = newAnn // Retain in Kotlin
                     view.addAnnotation(newAnn)
                 }
             }
             currentAnnotations.filterIsInstance<FriendAnnotation>().forEach { ann ->
-                if (friends.none { it.id == ann.friendId }) view.removeAnnotation(ann)
+                if (friends.none { it.id == ann.friendId }) {
+                    view.removeAnnotation(ann)
+                    friendAnnotationsMap.remove(ann.friendId)
+                }
             }
 
             // Sync Stations
@@ -195,13 +221,17 @@ actual fun MapView(
                     val newAnn = StationAnnotation(batteryId)
                     newAnn.setCoordinate(CLLocationCoordinate2DMake(battery.latitude, battery.longitude))
                     newAnn.setTitle(battery.name)
+                    stationAnnotationsMap[batteryId] = newAnn // Retain in Kotlin
                     view.addAnnotation(newAnn)
                 }
             }
             
             currentAnnotations.filterIsInstance<StationAnnotation>().forEach { ann ->
                 val exists = batteries.any { (it.id ?: "${it.latitude},${it.longitude}") == ann.stationId }
-                if (!exists) view.removeAnnotation(ann)
+                if (!exists) {
+                    view.removeAnnotation(ann)
+                    stationAnnotationsMap.remove(ann.stationId)
+                }
             }
 
             // Setup Tap Gesture
@@ -238,7 +268,7 @@ private fun createFriendUIImage(initial: String): UIImage? {
     val rect = CGRectMake(0.0, 0.0, size, size)
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), false, 0.0)
     val context = UIGraphicsGetCurrentContext()
-    CGContextSetFillColorWithColor(context, UIColor.colorWithRed(0.29, 0.87, 0.50, 1.0).CGColor)
+    CGContextSetFillColorWithColor(context, UIColor.colorWithRed(0.26, 0.73, 0.97, 1.0).CGColor)
     CGContextFillEllipseInRect(context, rect)
     CGContextSetStrokeColorWithColor(context, UIColor.whiteColor.CGColor)
     CGContextSetLineWidth(context, 2.0)

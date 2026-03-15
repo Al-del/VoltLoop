@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 
 @Composable
 fun MapScreen_real() {
-    var selected by remember { mutableStateOf(NavItem.StartTrip) }
+    var selected by remember { mutableStateOf(NavItem.Map) }
 
     Scaffold(
 
