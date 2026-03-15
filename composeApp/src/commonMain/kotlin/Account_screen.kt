@@ -71,9 +71,9 @@ fun AccountScreen() {
             val profile = supabase.postgrest["profiles"]
                 .select { filter { eq("email", email) } }
                 .decodeSingle<Profile>()
-        println("TEST PROFILE $profile")
+            println("TEST PROFILE $profile")
             val rows = supabase.postgrest["History"]
-                .select { filter { eq("Name", email) } }  // use email directly, not profile.username
+                .select { filter { eq("Name", email) } }
                 .decodeList<TripHistory>()
 
             println("TEST HISTORY size=${rows.size}")
@@ -89,8 +89,24 @@ fun AccountScreen() {
         }
     }
 
-    val friends    = AppState.friends.value
-    val listFriends = if (friends.size >= 3) friends.drop(3) else friends
+    val friends = AppState.friends.value
+
+    // Build a combined leaderboard: friends + current user, sorted by points descending
+    val currentUserProfile = AppState.currentUser.value?.let { user ->
+        friends.find { it.id == user.id }
+            ?: Profile(
+                id = user.id,
+                email = user.email,
+                username = user.email?.substringBefore("@"),
+                points = AppState.totalPoints.value.toLong()
+
+            )
+    }
+    val leaderboard = (friends + listOfNotNull(currentUserProfile))
+        .distinctBy { it.id }
+        .sortedByDescending { it.points }
+
+    val listFriends = if (leaderboard.size >= 3) leaderboard.drop(3) else leaderboard
 
     LazyColumn(
         modifier = Modifier
@@ -206,10 +222,10 @@ fun AccountScreen() {
         // LEADERBOARD VIEW
         // ════════════════════════════════════════════════════════
         if (showLeaderboard) {
-            if (friends.size >= 3) {
+            if (leaderboard.size >= 3) {
                 item {
                     Spacer(Modifier.height(20.dp))
-                    PodiumRow(friends = friends.take(3))
+                    PodiumRow(friends = leaderboard.take(3))
                     Spacer(Modifier.height(20.dp))
                 }
             }
@@ -228,7 +244,7 @@ fun AccountScreen() {
                 }
             }
 
-            if (listFriends.isEmpty() && friends.size < 3) {
+            if (listFriends.isEmpty() && leaderboard.size < 3) {
                 item {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
@@ -244,9 +260,10 @@ fun AccountScreen() {
                 }
             } else {
                 itemsIndexed(listFriends) { index, profile ->
-                    val rank = index + (if (friends.size >= 3) 4 else 1)
+                    val rank = index + (if (leaderboard.size >= 3) 4 else 1)
+                    val isCurrentUser = profile.id == AppState.currentUser.value?.id
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
-                        FriendRankCard(rank = rank, profile = profile)
+                        FriendRankCard(rank = rank, profile = profile, highlight = isCurrentUser)
                     }
                 }
             }
@@ -342,12 +359,12 @@ fun PodiumRow(friends: List<Profile>) {
         verticalAlignment = Alignment.Bottom
     ) {
         order.forEachIndexed { i, friendIndex ->
-            val profile    = friends[friendIndex]
-            val rank       = friendIndex + 1
-            val medalColor = when (rank) { 1 -> GoldColor; 2 -> SilverColor; else -> BronzeColor }
-            val medal      = when (rank) { 1 -> "🥇"; 2 -> "🥈"; else -> "🥉" }
-            // ← CHANGED: use displayName() instead of username ?: "?"
+            val profile     = friends[friendIndex]
+            val rank        = friendIndex + 1
+            val medalColor  = when (rank) { 1 -> GoldColor; 2 -> SilverColor; else -> BronzeColor }
+            val medal       = when (rank) { 1 -> "🥇"; 2 -> "🥈"; else -> "🥉" }
             val displayName = profile.displayName()
+            val isCurrentUser = profile.id == AppState.currentUser.value?.id
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -359,24 +376,40 @@ fun PodiumRow(friends: List<Profile>) {
                 Box(
                     modifier = Modifier
                         .size(if (rank == 1) 60.dp else 48.dp)
-                        .shadow(6.dp, CircleShape,
-                            ambientColor = medalColor.copy(alpha = 0.4f),
-                            spotColor    = medalColor.copy(alpha = 0.4f))
+                        .shadow(
+                            6.dp, CircleShape,
+                            ambientColor = if (isCurrentUser) BlueAccent.copy(alpha = 0.5f) else medalColor.copy(alpha = 0.4f),
+                            spotColor    = if (isCurrentUser) BlueAccent.copy(alpha = 0.5f) else medalColor.copy(alpha = 0.4f)
+                        )
                         .clip(CircleShape)
-                        .background(Color.White),
+                        .background(if (isCurrentUser) BlueSoft else Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = displayName.take(1).uppercase(),
-                        color = if (rank == 1) BlueAccent else TextPrimary,
+                        color = BlueAccent,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = if (rank == 1) 24.sp else 18.sp
                     )
                 }
 
                 Spacer(Modifier.height(6.dp))
-                Text(displayName, color = TextPrimary, fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        displayName,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (isCurrentUser) {
+                        Spacer(Modifier.width(3.dp))
+                        Text("(you)", color = BlueAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 Text("${profile.points} pts", color = medalColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
 
@@ -401,40 +434,73 @@ fun PodiumRow(friends: List<Profile>) {
 
 // ── Friend rank card ─────────────────────────────────────────
 @Composable
-fun FriendRankCard(rank: Int, profile: Profile) {
-    // ← CHANGED: use displayName() instead of username ?: "?"
+fun FriendRankCard(rank: Int, profile: Profile, highlight: Boolean = false) {
     val displayName = profile.displayName()
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = CardBg,
+        color = if (highlight) BlueSoft else CardBg,
         shadowElevation = 3.dp
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("#$rank", color = TextSecond, fontWeight = FontWeight.Bold,
-                fontSize = 14.sp, modifier = Modifier.width(36.dp))
+            Text(
+                "#$rank",
+                color = if (highlight) BlueAccent else TextSecond,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                modifier = Modifier.width(36.dp)
+            )
 
             Box(
-                modifier = Modifier.size(44.dp).clip(CircleShape).background(BlueSoft),
+                modifier = Modifier.size(44.dp).clip(CircleShape)
+                    .background(if (highlight) BlueAccent else BlueSoft),
                 contentAlignment = Alignment.Center
             ) {
-                Text(displayName.take(1).uppercase(), color = BlueAccent,
-                    fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                Text(
+                    displayName.take(1).uppercase(),
+                    color = if (highlight) Color.White else BlueAccent,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 18.sp
+                )
             }
 
             Spacer(Modifier.width(12.dp))
 
-            Text(displayName, color = TextPrimary, fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp, modifier = Modifier.weight(1f),
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    displayName,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (highlight) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(shape = RoundedCornerShape(20.dp), color = BlueAccent) {
+                        Text(
+                            "you",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
 
-            Surface(shape = RoundedCornerShape(20.dp), color = BlueSoft) {
-                Text("${profile.points} pts", color = BlueAccent, fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+            Surface(shape = RoundedCornerShape(20.dp), color = if (highlight) BlueAccent else BlueSoft) {
+                Text(
+                    "${profile.points} pts",
+                    color = if (highlight) Color.White else BlueAccent,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
             }
         }
     }
