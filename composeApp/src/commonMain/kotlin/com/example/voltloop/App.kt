@@ -17,17 +17,52 @@ fun App() {
     when (sessionStatus) {
         is SessionStatus.Authenticated -> {
             val user = (sessionStatus as SessionStatus.Authenticated).session.user
+
             AppState.currentUser.value = user
 
             LaunchedEffect(user?.email) {
                 user?.email?.let { email ->
                     try {
+                        // 1. Fetch the current user's profile
                         val profile = supabase.postgrest["profiles"]
                             .select { filter { eq("email", email) } }
                             .decodeSingle<Profile>()
                         AppState.totalPoints.value = profile.points.toInt()
+
+                        // 2. Fetch all friendships where this user is involved
+                        val userId = user.id
+                        val friendships = supabase.postgrest["friendships"]
+                            .select {
+                                filter {
+                                    or {
+                                        eq("user_id", userId)
+                                        eq("friend_id", userId)
+                                    }
+                                }
+                            }
+                            .decodeList<Friendship>()
+
+                        // 3. Extract the friend IDs (the other side of each row)
+                        val friendIds = friendships.map { friendship ->
+                            if (friendship.userId == userId) friendship.friendId
+                            else friendship.userId
+                        }
+
+                        // 4. Fetch each friend's profile and sort by points descending
+                        if (friendIds.isNotEmpty()) {
+                            val friendProfiles = supabase.postgrest["profiles"]
+                                .select {
+                                    filter {
+                                        isIn("id", friendIds)
+                                    }
+                                }
+                                .decodeList<Profile>()
+
+                            AppState.friends.value = friendProfiles.sortedByDescending { it.points }
+                        }
+                        println("FRIENDS_LIST: ${AppState.friends.value.map { "${it.username} - ${it.points} pts" }}")
                     } catch (e: Exception) {
-                        println("POINTS_FETCH_ERROR: ${e.message}")
+                        println("FETCH_ERROR: ${e.message}")
                     }
                 }
             }

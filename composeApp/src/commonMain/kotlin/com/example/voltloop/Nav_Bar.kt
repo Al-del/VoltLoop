@@ -69,7 +69,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object Map : Screen("map")
     object StartTrip : Screen("start_trip")
-    object Account : Screen("account")           // NEW — separate from StartTrip
+    object Account : Screen("account")
     object Friends : Screen("friends")
     object Store : Screen("store")
     object QrScanner : Screen("qr_scanner")
@@ -279,25 +279,6 @@ private fun NavIconButton(
     }
 }
 
-// ─── NEW: simple Account screen ───────────────────────────────────────────────
-@Composable
-fun AccountScreen() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "Account",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = GreenDark
-        )
-    }
-}
-// ──────────────────────────────────────────────────────────────────────────────
-
 @Composable
 fun Nav_Bar_ussage() {
     val navController = rememberNavController()
@@ -477,8 +458,8 @@ fun Nav_Bar_ussage() {
                 startDestination = Screen.Map.route,
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable(Screen.Settings.route)  { SettingsScreen() }
-                composable(Screen.Account.route)   { AccountScreen() }   // NEW
+                composable(Screen.Settings.route)  { AccountScreen() }
+                composable(Screen.Account.route)   { }   // NEW
                 composable(Screen.StartTrip.route) { Start_Trip() }      // lightning button only
                 composable(Screen.Friends.route)   { FriendsScreen(navController) }
                 composable(Screen.Store.route)     { StoreScreen() }
